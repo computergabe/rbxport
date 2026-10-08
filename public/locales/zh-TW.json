@@ -1475,5 +1475,16 @@
   "Select a drive": "選擇磁碟",
   "Add memory cue at first beat": "Add memory cue at first beat",
   "The analysis was saved, but the first-beat memory cue could not be added.": "The analysis was saved, but the first-beat memory cue could not be added.",
-  "Export to this device first to set its background color.": "請先匯出至此裝置，才能設定其背景顏色。"
+  "Export to this device first to set its background color.": "請先匯出至此裝置，才能設定其背景顏色。",
+  "1 file skipped.": "1 file skipped.",
+  "Do you want to replace them with the one you're importing?": "是否以要匯入的播放清單或文件夾取代?",
+  "Drop folders onto Playlists or a playlist folder to make playlists of them.": "Drop folders onto Playlists or a playlist folder to make playlists of them.",
+  "Importing 1 folder…": "Importing 1 folder…",
+  "Importing {count} folders…": "Importing {count} folders…",
+  "Made playlists: {names}.": "Made playlists: {names}.",
+  "No playlist was made.": "No playlist was made.",
+  "No playlist was made: the folders hold no audio files.": "No playlist was made: the folders hold no audio files.",
+  "One or several lists with the same name already exist.": "相同名稱的播放清單或文件夾已經存在",
+  "[data-file-drop-folder]": "[data-file-drop-folder]",
+  "{count} files skipped.": "{count} files skipped."
 }

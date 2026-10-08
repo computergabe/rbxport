@@ -9,7 +9,7 @@ import type {
   AnalysisResult, AudioDevices, Backend, Backup, BackupProgress, BackupSizes, Cue, DeckEvent, Device, DeviceSettings, DeviceSyncState,
   Diagnostics, Duplicates, GridState, Limiter, PreferencesRequest, SmartRule, SyncDeviceReport, SyncProgress, UpdateCheck,
   UpdateProgress, UpdateReady, XmlImportReport,
-  ExportProgress, ExportReport, ExplorerChildren, ExplorerRoot, FilterValues, Phrase, ImportReport,
+  ExportProgress, ExportReport, ExplorerChildren, ExplorerRoot, FilterValues, FolderPlaylistReport, Phrase, ImportReport,
   DatabaseDrive, EditHistoryState, ItunesLibrary, LibraryProblem, LibrarySummary, LinkPeerSeen, Meters,
   LinkStatus, MissingExportFile, MissingTracks, PreviewState, ReferenceStickSettings, RelocateReport, RowDto, ScriptRequest, Tick,
   TreeNode, ViewHandle,
@@ -196,6 +196,8 @@ async function realBackend(): Promise<Backend> {
       return invoke<ImportReport>("import_files", { paths: picked });
     },
     importPaths: (paths) => invoke<ImportReport>("import_files", { paths }),
+    importFolderPlaylist: (path, parent, replace) =>
+      invoke<FolderPlaylistReport>("import_folder_playlist", { path, parent, replace: replace ?? null }),
     exportLoopWav: async (track, title, inMs, outMs) => {
       const { save } = await import("@tauri-apps/plugin-dialog");
       const picked = await save({

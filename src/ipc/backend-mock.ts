@@ -2507,6 +2507,20 @@ export function createMockBackend(options: MockOptions = {}): Backend {
     importFiles: () => wait(null),
     importFolder: () => wait(null),
     importPaths: (paths) => wait({ imported: 0, skipped: paths.map((p) => `${p}: the mock library takes no files`), tracks: [], existing: [] }),
+    // No file system in a browser: a path without an extension stands for a
+    // folder, which becomes an empty playlist the way a real drop names one.
+    importFolderPlaylist: async (path, parent, replace) => {
+      const name = path.split(/[\\/]/).filter(Boolean).pop() ?? "";
+      const report = { name, playlist: null, conflict: null, folder: false, imported: 0, skipped: [], tracks: [], existing: 0 };
+      if (!name || /\.[a-z0-9]+$/i.test(name)) return wait(report);
+      const clash = childrenOf(parent).find((n) => n.name === name);
+      if (clash && clash.id !== replace) return wait({ ...report, folder: true, conflict: clash.id });
+      if (clash) await edits.deletePlaylist(clash.id);
+      const before = new Set(tree.map((n) => n.id));
+      await edits.createPlaylist(name, parent);
+      const made = tree.find((n) => !before.has(n.id))?.id ?? null;
+      return wait({ ...report, folder: true, playlist: made });
+    },
     importXml: () => wait(null),
     exportLoopWav: () => wait(null),
     importItunes: () => wait(null),

@@ -569,6 +569,7 @@ pub fn run() {
             commands::missing_tracks,
             commands::find_duplicates,
             commands::import_files,
+            commands::import_folder_playlist,
             commands::relocate_track,
             relocate::auto_relocate,
             preferences::open_preferences,

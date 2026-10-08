@@ -1407,5 +1407,16 @@
   "This operation may require long time.",
   "Failed to switch Master Database.",
   "Database management",
-  "Select a drive"
+  "Select a drive",
+  "1 file skipped.",
+  "Do you want to replace them with the one you're importing?",
+  "Drop folders onto Playlists or a playlist folder to make playlists of them.",
+  "Importing 1 folder…",
+  "Importing {count} folders…",
+  "Made playlists: {names}.",
+  "No playlist was made.",
+  "No playlist was made: the folders hold no audio files.",
+  "One or several lists with the same name already exist.",
+  "[data-file-drop-folder]",
+  "{count} files skipped."
 ]

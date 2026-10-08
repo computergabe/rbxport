@@ -1475,5 +1475,16 @@
   "Select a drive": "选择驱动器",
   "Add memory cue at first beat": "Add memory cue at first beat",
   "The analysis was saved, but the first-beat memory cue could not be added.": "The analysis was saved, but the first-beat memory cue could not be added.",
-  "Export to this device first to set its background color.": "请先导出到此设备，然后才能设置其背景颜色。"
+  "Export to this device first to set its background color.": "请先导出到此设备，然后才能设置其背景颜色。",
+  "1 file skipped.": "1 file skipped.",
+  "Do you want to replace them with the one you're importing?": "想用即将导入的播放列表或文件夹替换原播放列表或文件夹吗？",
+  "Drop folders onto Playlists or a playlist folder to make playlists of them.": "Drop folders onto Playlists or a playlist folder to make playlists of them.",
+  "Importing 1 folder…": "Importing 1 folder…",
+  "Importing {count} folders…": "Importing {count} folders…",
+  "Made playlists: {names}.": "Made playlists: {names}.",
+  "No playlist was made.": "No playlist was made.",
+  "No playlist was made: the folders hold no audio files.": "No playlist was made: the folders hold no audio files.",
+  "One or several lists with the same name already exist.": "已经存在同名的播放列表或文件夹",
+  "[data-file-drop-folder]": "[data-file-drop-folder]",
+  "{count} files skipped.": "{count} files skipped."
 }

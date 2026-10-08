@@ -1474,5 +1474,16 @@
   "Select a drive": "Seleccionar uma unidade",
   "Add memory cue at first beat": "Add memory cue at first beat",
   "The analysis was saved, but the first-beat memory cue could not be added.": "The analysis was saved, but the first-beat memory cue could not be added.",
-  "Export to this device first to set its background color.": "Exporte primeiro para este dispositivo para definir a cor de fundo."
+  "Export to this device first to set its background color.": "Exporte primeiro para este dispositivo para definir a cor de fundo.",
+  "1 file skipped.": "1 file skipped.",
+  "Do you want to replace them with the one you're importing?": "Deseja substituí-las pela que está a importar?",
+  "Drop folders onto Playlists or a playlist folder to make playlists of them.": "Drop folders onto Playlists or a playlist folder to make playlists of them.",
+  "Importing 1 folder…": "Importing 1 folder…",
+  "Importing {count} folders…": "Importing {count} folders…",
+  "Made playlists: {names}.": "Made playlists: {names}.",
+  "No playlist was made.": "No playlist was made.",
+  "No playlist was made: the folders hold no audio files.": "No playlist was made: the folders hold no audio files.",
+  "One or several lists with the same name already exist.": "Já existe uma ou várias lista com o mesmo nome. ",
+  "[data-file-drop-folder]": "[data-file-drop-folder]",
+  "{count} files skipped.": "{count} files skipped."
 }
