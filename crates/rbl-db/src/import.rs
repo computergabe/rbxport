@@ -132,27 +132,47 @@ pub fn read_tags(path: &Path) -> Result<TrackTags, ImportError> {
         ..TrackTags::default()
     };
 
-    // The primary tag, or the first there is: a file can carry several, and
-    // taking whichever exists beats reporting nothing.
-    if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
-        let text = |key: &ItemKey| tag.get_string(key).unwrap_or_default().to_owned();
-        tags.title = text(&ItemKey::TrackTitle);
-        tags.artist = text(&ItemKey::TrackArtist);
-        tags.album = text(&ItemKey::AlbumTitle);
-        tags.genre = text(&ItemKey::Genre);
-        tags.label = text(&ItemKey::Label);
-        tags.comment = text(&ItemKey::Comment);
-        tags.year = tag
-            .get_string(&ItemKey::RecordingDate)
-            .and_then(|v| v.get(..4).and_then(|y| y.parse().ok()))
-            .or_else(|| tag.get_string(&ItemKey::Year).and_then(|v| v.parse().ok()))
-            .unwrap_or(0);
-        tags.track_no = tag
-            .get_string(&ItemKey::TrackNumber)
-            // "3/12" is a legal track number; take the part before the slash.
-            .and_then(|v| v.split('/').next().and_then(|n| n.trim().parse().ok()))
-            .unwrap_or(0);
-    }
+    // A file can carry several tags: an MP3 often has an ID3v2 and an ID3v1,
+    // a WAV an `id3 ` chunk and RIFF INFO. Each field comes from the primary
+    // tag when that has it, else from the first other tag that does. Reading
+    // the primary tag alone lost an artist that only the ID3v1 or the RIFF
+    // INFO named [OBS: #218 fixtures]; rekordbox reads all of these formats
+    // (manual 7.2.18, p.13).
+    let primary = tagged.primary_tag();
+    let order: Vec<&lofty::tag::Tag> = primary
+        .into_iter()
+        .chain(tagged.tags().iter().filter(|t| primary.is_none_or(|p| p.tag_type() != t.tag_type())))
+        .collect();
+    let first = |key: &ItemKey| {
+        order
+            .iter()
+            .find_map(|tag| tag.get_string(key).filter(|v| !v.trim().is_empty()))
+    };
+    let text = |key: &ItemKey| first(key).unwrap_or_default().to_owned();
+    tags.title = text(&ItemKey::TrackTitle);
+    tags.artist = text(&ItemKey::TrackArtist);
+    tags.album = text(&ItemKey::AlbumTitle);
+    tags.genre = text(&ItemKey::Genre);
+    tags.label = text(&ItemKey::Label);
+    tags.comment = text(&ItemKey::Comment);
+    tags.year = order
+        .iter()
+        .find_map(|tag| {
+            tag.get_string(&ItemKey::RecordingDate)
+                .and_then(|v| v.get(..4).and_then(|y| y.parse().ok()))
+                .or_else(|| tag.get_string(&ItemKey::Year).and_then(|v| v.parse().ok()))
+                .filter(|&y: &u16| y != 0)
+        })
+        .unwrap_or(0);
+    tags.track_no = order
+        .iter()
+        .find_map(|tag| {
+            tag.get_string(&ItemKey::TrackNumber)
+                // "3/12" is a legal track number; take the part before the slash.
+                .and_then(|v| v.split('/').next().and_then(|n| n.trim().parse().ok()))
+                .filter(|&n: &u16| n != 0)
+        })
+        .unwrap_or(0);
 
     if tags.title.is_empty() {
         tags.title = path
@@ -193,6 +213,121 @@ mod tests {
             read_tags(&path),
             Err(ImportError::UnsupportedFormat { .. })
         ));
+    }
+
+    use lofty::config::WriteOptions;
+    use lofty::prelude::TagExt;
+    use lofty::tag::{Tag, TagType};
+
+    /// Forty silent MPEG-1 Layer III frames: 128 kbps, 44.1 kHz, 417 bytes
+    /// each, enough for the probe to find a stream.
+    fn write_mp3(path: &Path) {
+        let mut out = Vec::new();
+        for _ in 0..40 {
+            let start = out.len();
+            out.extend_from_slice(&[0xFF, 0xFB, 0x90, 0x64]);
+            out.resize(start + 417, 0);
+        }
+        std::fs::write(path, out).unwrap();
+    }
+
+    /// One second of 16-bit mono silence.
+    fn write_wav(path: &Path) {
+        let rate = 44_100_u32;
+        let data_len = rate * 2;
+        let mut out = Vec::new();
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&(36 + data_len).to_le_bytes());
+        out.extend_from_slice(b"WAVEfmt ");
+        out.extend_from_slice(&16_u32.to_le_bytes());
+        out.extend_from_slice(&1_u16.to_le_bytes());
+        out.extend_from_slice(&1_u16.to_le_bytes());
+        out.extend_from_slice(&rate.to_le_bytes());
+        out.extend_from_slice(&(rate * 2).to_le_bytes());
+        out.extend_from_slice(&2_u16.to_le_bytes());
+        out.extend_from_slice(&16_u16.to_le_bytes());
+        out.extend_from_slice(b"data");
+        out.extend_from_slice(&data_len.to_le_bytes());
+        out.resize(44 + data_len as usize, 0);
+        std::fs::write(path, out).unwrap();
+    }
+
+    fn save_tag(path: &Path, kind: TagType, items: &[(ItemKey, &str)]) {
+        let mut tag = Tag::new(kind);
+        for (key, value) in items {
+            tag.insert_text(key.clone(), (*value).to_owned());
+        }
+        tag.save_to_path(path, WriteOptions::default()).unwrap();
+    }
+
+    #[test]
+    fn an_mp3_takes_what_its_id3v2_lacks_from_its_id3v1() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("two tags.mp3");
+        write_mp3(&path);
+        save_tag(&path, TagType::Id3v1, &[
+            (ItemKey::TrackTitle, "Old Title"),
+            (ItemKey::TrackArtist, "Only In V1"),
+            (ItemKey::AlbumTitle, "V1 Album"),
+            (ItemKey::Genre, "House"),
+            (ItemKey::Year, "2019"),
+            (ItemKey::TrackNumber, "4"),
+        ]);
+        save_tag(&path, TagType::Id3v2, &[(ItemKey::TrackTitle, "New Title")]);
+
+        let tags = read_tags(&path).unwrap();
+        assert_eq!(tags.title, "New Title", "the ID3v2 still wins where it has a value");
+        assert_eq!(tags.artist, "Only In V1");
+        assert_eq!(tags.album, "V1 Album");
+        assert_eq!(tags.genre, "House");
+        assert_eq!((tags.year, tags.track_no), (2019, 4));
+    }
+
+    #[test]
+    fn a_wav_takes_what_its_id3_chunk_lacks_from_its_riff_info() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("both.wav");
+        write_wav(&path);
+        save_tag(&path, TagType::RiffInfo, &[
+            (ItemKey::TrackTitle, "Info Title"),
+            (ItemKey::TrackArtist, "Info Artist"),
+        ]);
+        save_tag(&path, TagType::Id3v2, &[(ItemKey::TrackTitle, "Id3 Title")]);
+
+        let tags = read_tags(&path).unwrap();
+        assert_eq!(tags.title, "Id3 Title");
+        assert_eq!(tags.artist, "Info Artist");
+    }
+
+    #[test]
+    fn a_blank_field_in_the_primary_tag_does_not_hide_another_tags_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blank.mp3");
+        write_mp3(&path);
+        save_tag(&path, TagType::Id3v1, &[(ItemKey::TrackArtist, "Real Artist")]);
+        save_tag(&path, TagType::Id3v2, &[(ItemKey::TrackArtist, "  ")]);
+        assert_eq!(read_tags(&path).unwrap().artist, "Real Artist");
+    }
+
+    #[test]
+    fn a_file_with_one_tag_reads_as_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.mp3");
+        write_mp3(&path);
+        save_tag(&path, TagType::Id3v2, &[
+            (ItemKey::TrackTitle, "Title"),
+            (ItemKey::TrackArtist, "Artist"),
+            (ItemKey::RecordingDate, "2021-05-01"),
+            (ItemKey::TrackNumber, "3/12"),
+        ]);
+        let tags = read_tags(&path).unwrap();
+        assert_eq!((tags.title.as_str(), tags.artist.as_str()), ("Title", "Artist"));
+        assert_eq!((tags.year, tags.track_no), (2021, 3));
+
+        let untagged = dir.path().join("No Tags.mp3");
+        write_mp3(&untagged);
+        let tags = read_tags(&untagged).unwrap();
+        assert_eq!((tags.title.as_str(), tags.artist.as_str()), ("No Tags", ""));
     }
 
     #[test]
