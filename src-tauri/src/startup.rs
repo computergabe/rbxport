@@ -15,6 +15,9 @@ pub fn begin() { let _ = START.set(Instant::now()); }
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value, reason = "Tauri injects the calling window by value")]
 pub fn show_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if crate::import_cli::requested() {
+        return Ok(());
+    }
     // The compiled-app integration suites still need the webview to render so
     // their test port can evaluate the page, but the CDJ rigs do not need to
     // put that window on the operator's desktop. Requiring the debug-only test
