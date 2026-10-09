@@ -18,6 +18,8 @@ Commands in these guides run from the repository root unless stated otherwise.
 
 ## Using the app
 
+- [Windows import command](user/windows-import.md): one-shot import in this fork.
+
 - [Track analysis settings](user/analysis-settings.md): choosing stages and queuing a batch.
 - [USB export](user/usb-export.md): compatibility conversion and playlist cleanup.
 - [Backups](user/backups.md): backup contents, storage, and restoration.

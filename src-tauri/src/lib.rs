@@ -9,6 +9,7 @@ mod windowfit;
 mod file_drop;
 mod file_drag;
 mod startup;
+mod import_cli;
 mod screen_cache;
 mod sentry;
 pub mod analysis;
@@ -416,6 +417,7 @@ pub fn run() {
             // AppleScript: the bridge to the window, and on macOS the
             // scriptable classes, before any Apple Event can arrive.
             crate::scripting::install(app.handle());
+            crate::import_cli::start(app.handle()).map_err(std::io::Error::other)?;
             spawn_library_load(app.handle().clone());
             // Join the network on start: a passive watcher that hears every
             // player and mixer and reports them, so the shell can offer LINK
