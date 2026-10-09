@@ -119,8 +119,12 @@ fn execute(app: &tauri::AppHandle, paths: Vec<String>) -> Result<crate::dto::Imp
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    bridge.refuse_if_protected().map_err(|e| e.message)?;
-    tauri::async_runtime::block_on(crate::commands::import_files(app.clone(), state, paths))
+    protected_import(app, paths)
+}
+
+fn protected_import<R: tauri::Runtime>(app: &tauri::AppHandle<R>, paths: Vec<String>) -> Result<crate::dto::ImportReportDto, String> {
+    app.state::<Arc<crate::scripting::Bridge>>().refuse_if_protected().map_err(|e| e.message)?;
+    tauri::async_runtime::block_on(crate::commands::import_files(app.clone(), app.state::<Arc<crate::state::AppState>>(), paths))
         .map_err(|e| e.message)
 }
 
@@ -168,5 +172,53 @@ mod tests {
         std::fs::write(&path, "").unwrap();
         assert!(acquire_lock(dir.path()).is_err());
         assert!(path.exists());
+    }
+
+    #[test]
+    fn fixture_import_honours_protection_and_retry_skips_existing_tracks() {
+        let dir = tempfile::tempdir().unwrap();
+        let location = rbl_db::fixture::build(dir.path(), rbl_db::fixture::Shape::default()).unwrap();
+        let db = rbl_db::Library::open(location.clone(), rbl_db::OpenMode::ReadOnly).unwrap();
+        let (library, _) = rbl_index::load(&db).unwrap();
+        let state = crate::state::AppState::with_backups(dir.path().join("backups"));
+        state.set_library(library, false, db.schema().db_version, 0, location);
+        let app = tauri::test::mock_app();
+        app.manage(Arc::new(state));
+        app.manage(Arc::new(crate::scripting::Bridge::default()));
+        let path = dir.path().join("new track.wav");
+        let mut wav = Vec::new();
+        let size = 44100_u32 * 4;
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + size).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&44100_u32.to_le_bytes());
+        wav.extend_from_slice(&(44100_u32 * 4).to_le_bytes());
+        wav.extend_from_slice(&4_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&size.to_le_bytes());
+        wav.resize(44 + size as usize, 0);
+        std::fs::write(&path, wav).unwrap();
+        let paths = vec![path.to_str().unwrap().to_owned()];
+        // Unknown protection must refuse before opening a writer.
+        assert!(protected_import(app.handle(), paths.clone()).is_err());
+        for protected in [true, false] {
+            tauri::async_runtime::block_on(crate::scripting::script_preferences(
+                app.state(), serde_json::json!({"advanced": {"protectLibrary": protected}}),
+            )).unwrap();
+            let result = protected_import(app.handle(), paths.clone());
+            if protected {
+                assert!(result.is_err());
+            } else {
+                assert_eq!(result.unwrap().imported, 1);
+            }
+        }
+        let retry = protected_import(app.handle(), paths).unwrap();
+        assert_eq!(retry.imported, 0);
+        assert_eq!(retry.existing.len(), 1);
+        assert!(retry.skipped.is_empty());
     }
 }
