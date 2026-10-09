@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 60
     env:
       RBXPORT_TEST: '1'
-      CARGO_TARGET_DIR: C:/rbx-target
+      CARGO_TARGET_DIR: target
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -19,7 +19,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: '. -> C:/rbx-target'
+          workspaces: '. -> target'
           cache-on-failure: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
         run: |
           $vs = & 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -property installationPath
           $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1
-          $test = Get-ChildItem 'C:\rbx-target\debug\deps\rbxport_lib-*.exe' | Select-Object -First 1
+          $test = Get-ChildItem 'target\debug\deps\rbxport_lib-*.exe' | Select-Object -First 1
           & $dumpbin.FullName /imports $test.FullName | Out-File native-imports.txt
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -48,7 +48,7 @@ jobs:
           name: native-test-diagnostics
           path: |
             native-imports.txt
-            C:/rbx-target/debug/deps/rbxport_lib-*.exe
+            target/debug/deps/rbxport_lib-*.exe
       - run: cargo test -p rbxport --test commands import
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
@@ -56,4 +56,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: rbxport-windows-import
-          path: C:/rbx-target/release/rbxport.exe
+          path: target/release/rbxport.exe
