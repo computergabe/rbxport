@@ -34,6 +34,11 @@ folders, delete audio, analyse tracks, or change ZIP extraction behavior.
 Imports can partially succeed before an error. Retrying uses existing-path
 detection, so retain the album paths until a successful result is recorded.
 
+An interrupted process can leave `automation-import.lock` in RBXPORT's app
+cache directory. Close every RBXPORT process before removing that marker to
+retry. The command deliberately does not guess whether a leftover lock is safe
+to remove.
+
 Development checks must use disposable fixture libraries with
 `RBXPORT_TEST=1`; never use the installed library as a test target. This feature
 needs native Windows validation before it is connected to a production launcher.

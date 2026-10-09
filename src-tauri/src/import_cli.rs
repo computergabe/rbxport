@@ -16,6 +16,15 @@ impl Drop for ImportLock {
     }
 }
 
+fn acquire_lock(cache: &std::path::Path) -> Result<ImportLock, String> {
+    std::fs::create_dir_all(cache).map_err(|e| e.to_string())?;
+    let path = cache.join("automation-import.lock");
+    let file = OpenOptions::new().write(true).create_new(true).open(&path)
+        .map_err(|e| format!("Cannot acquire import lock (another import or an interrupted run): {e}"))?;
+    drop(file);
+    Ok(ImportLock(path))
+}
+
 fn parse(args: &[OsString]) -> Result<Option<Request>, String> {
     if args.first().is_none_or(|arg| arg != "--import") {
         return Ok(None);
@@ -77,11 +86,7 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
 
 fn execute(app: &tauri::AppHandle, paths: Vec<String>) -> Result<crate::dto::ImportReportDto, String> {
     let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-    let lock_path = cache.join("automation-import.lock");
-    let _file = OpenOptions::new().write(true).create_new(true).open(&lock_path)
-        .map_err(|e| format!("Cannot acquire import lock (another import or an interrupted run): {e}"))?;
-    let _lock = ImportLock(lock_path);
+    let _lock = acquire_lock(&cache)?;
     // Another GUI process has its own edit gate. Refuse rather than writing
     // concurrently through two unrelated application states.
     let processes = sysinfo::System::new_all();
@@ -145,5 +150,23 @@ mod tests {
         for values in [vec!["--import"], vec!["--import", "album"], vec!["--import", "--import-report"], vec!["--import", "album", "--watch", "yes"], vec!["--import", "album", "--import-report", "one", "--import-report", "two"]] {
             assert!(parse(&arguments(&values)).is_err());
         }
+    }
+
+    #[test]
+    fn overlapping_imports_are_refused_and_lock_is_released() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = acquire_lock(dir.path()).unwrap();
+        assert!(acquire_lock(dir.path()).is_err());
+        drop(first);
+        assert!(acquire_lock(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn interrupted_run_requires_explicit_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("automation-import.lock");
+        std::fs::write(&path, "").unwrap();
+        assert!(acquire_lock(dir.path()).is_err());
+        assert!(path.exists());
     }
 }
