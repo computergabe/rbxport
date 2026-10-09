@@ -37,6 +37,38 @@ pub struct TrackTags {
     /// Bits per sample; 16 when the format does not say (an MP3), which is
     /// what rekordbox records for one.
     pub bit_depth: u8,
+    /// The musical key the tag names, as written there (`Am`, `8A`); empty
+    /// when it names none. See [`tag_key`].
+    pub key: String,
+}
+
+/// The MP4 atom rekordbox takes a key from. Not lofty's `InitialKey`
+/// mapping (`----:com.apple.iTunes:initialkey`): rekordbox's `parseKey`
+/// names this one and no other [OBS: see [`tag_key`]].
+const MP4_KEY: &str = "----:com.apple.iTunes:KEY";
+
+/// The key a file's tags name, read where rekordbox reads it.
+///
+/// rekordbox 7.2.11 (macOS arm64) `TagLib::ParseTag::parseKey` @0x100c6ff10
+/// [OBS static]: the `ID3v2` tag's `TKEY` when the file has a non-empty `ID3v2`
+/// tag; otherwise the MP4 atom [`MP4_KEY`]; otherwise the Vorbis comment
+/// `INITIALKEY`. A non-empty `ID3v2` tag without a `TKEY` gives no key; the
+/// other tags are not consulted. Import (`DatabaseMediator::addTrack`
+/// @0x10166eae8) and Reload Tag (`DatabaseMediator::readTag` @0x100aa41ec)
+/// both store it through `convertTagData` @0x100aa4be0, which copies the key
+/// when it is not empty and leaves the tag's BPM unused, so a BPM tag is not
+/// read here either. Surrounding whitespace is dropped so one key does not
+/// become two `djmdKey` rows [ASSUME: rekordbox keeps the text as is].
+fn tag_key(tagged: &lofty::file::TaggedFile) -> String {
+    use lofty::tag::{TagExt, TagType};
+    let found = if let Some(id3) = tagged.tag(TagType::Id3v2).filter(|t| !t.is_empty()) {
+        id3.get_string(&ItemKey::InitialKey)
+    } else if let Some(mp4) = tagged.tag(TagType::Mp4Ilst).filter(|t| !t.is_empty()) {
+        mp4.get_string(&ItemKey::Unknown(MP4_KEY.to_owned()))
+    } else {
+        tagged.tag(TagType::VorbisComments).and_then(|t| t.get_string(&ItemKey::InitialKey))
+    };
+    found.map(str::trim).unwrap_or_default().to_owned()
 }
 
 /// `djmdContent.FileType` for a file, by extension: what rekordbox writes on
@@ -173,6 +205,7 @@ pub fn read_tags(path: &Path) -> Result<TrackTags, ImportError> {
                 .filter(|&n: &u16| n != 0)
         })
         .unwrap_or(0);
+    tags.key = tag_key(&tagged);
 
     if tags.title.is_empty() {
         tags.title = path
@@ -328,6 +361,80 @@ mod tests {
         write_mp3(&untagged);
         let tags = read_tags(&untagged).unwrap();
         assert_eq!((tags.title.as_str(), tags.artist.as_str()), ("No Tags", ""));
+    }
+
+    #[test]
+    fn the_key_comes_from_an_id3v2_tkey_as_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let mp3 = dir.path().join("keyed.mp3");
+        write_mp3(&mp3);
+        save_tag(&mp3, TagType::Id3v2, &[(ItemKey::TrackTitle, "T"), (ItemKey::InitialKey, "2A")]);
+        assert_eq!(read_tags(&mp3).unwrap().key, "2A");
+
+        // A WAV's id3 chunk is an ID3v2 tag too.
+        let wav = dir.path().join("keyed.wav");
+        write_wav(&wav);
+        save_tag(&wav, TagType::Id3v2, &[(ItemKey::TrackTitle, "T"), (ItemKey::InitialKey, " F#m ")]);
+        assert_eq!(read_tags(&wav).unwrap().key, "F#m");
+    }
+
+    /// A FLAC stream with the given Vorbis comments and no audio frames:
+    /// 44.1 kHz, mono, 16-bit, one second. Written by hand, since lofty's
+    /// writer wants real frames to write around.
+    fn write_flac(path: &Path, comments: &[&str]) {
+        let mut out = b"fLaC".to_vec();
+        // STREAMINFO (type 0), 34 bytes, not the last block.
+        out.extend_from_slice(&[0x00, 0, 0, 34]);
+        out.extend_from_slice(&4096_u16.to_be_bytes());
+        out.extend_from_slice(&4096_u16.to_be_bytes());
+        out.extend_from_slice(&[0; 6]);
+        // 20 bits rate (44,100), 3 bits channels - 1 (0), 5 bits depth - 1
+        // (15), 36 bits samples (44,100).
+        let packed: u64 = (0xAC44 << 44) | (0xF << 36) | 0xAC44;
+        out.extend_from_slice(&packed.to_be_bytes());
+        out.extend_from_slice(&[0; 16]);
+        // VORBIS_COMMENT (type 4), the last block: little-endian lengths.
+        let mut block = Vec::new();
+        block.extend_from_slice(&4_u32.to_le_bytes());
+        block.extend_from_slice(b"test");
+        block.extend_from_slice(&u32::try_from(comments.len()).unwrap().to_le_bytes());
+        for comment in comments {
+            block.extend_from_slice(&u32::try_from(comment.len()).unwrap().to_le_bytes());
+            block.extend_from_slice(comment.as_bytes());
+        }
+        let len = u32::try_from(block.len()).unwrap().to_be_bytes();
+        out.extend_from_slice(&[0x84, len[1], len[2], len[3]]);
+        out.extend_from_slice(&block);
+        std::fs::write(path, out).unwrap();
+    }
+
+    #[test]
+    fn a_flac_takes_its_key_from_the_initialkey_comment() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("keyed.flac");
+        write_flac(&path, &["TITLE=T", "INITIALKEY=Am"]);
+        let tags = read_tags(&path).unwrap();
+        assert_eq!((tags.title.as_str(), tags.key.as_str()), ("T", "Am"));
+    }
+
+    #[test]
+    fn a_bpm_tag_does_not_become_a_key_and_no_key_tag_means_no_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bpm only.mp3");
+        write_mp3(&path);
+        save_tag(&path, TagType::Id3v2, &[(ItemKey::TrackTitle, "T"), (ItemKey::Bpm, "128")]);
+        assert_eq!(read_tags(&path).unwrap().key, "");
+    }
+
+    #[test]
+    fn a_file_with_no_id3v2_does_not_take_a_key_from_its_ape_tag() {
+        // rekordbox looks for a key in ID3v2, MP4 and Vorbis comments only.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ape.mp3");
+        write_mp3(&path);
+        save_tag(&path, TagType::Ape, &[(ItemKey::TrackArtist, "A"), (ItemKey::InitialKey, "Am")]);
+        let tags = read_tags(&path).unwrap();
+        assert_eq!((tags.artist.as_str(), tags.key.as_str()), ("A", ""));
     }
 
     #[test]

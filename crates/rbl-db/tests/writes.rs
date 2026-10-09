@@ -2205,6 +2205,53 @@ fn reload_tag_reads_the_file_again_over_the_row() {
 }
 
 #[test]
+fn an_imported_files_key_tag_points_the_track_at_a_key_row() {
+    use lofty::config::WriteOptions;
+    use lofty::prelude::{ItemKey, TagExt};
+    use lofty::tag::{Tag, TagType};
+
+    let tagged = |path: &std::path::Path, key: &str| {
+        write_wav(path, 1);
+        let mut tag = Tag::new(TagType::Id3v2);
+        tag.insert_text(ItemKey::TrackTitle, "Keyed".to_owned());
+        tag.insert_text(ItemKey::InitialKey, key.to_owned());
+        tag.save_to_path(path, WriteOptions::default()).unwrap();
+    };
+    let key_of = |f: &mut Fixture, id: &str| -> Option<String> {
+        f.one(
+            "SELECT k.ScaleName FROM djmdContent c LEFT JOIN djmdKey k ON k.ID = c.KeyID WHERE c.ID = ?1",
+            &[&id],
+        )
+    };
+    let audio = tempfile::tempdir().unwrap();
+    let mut f = fixture();
+
+    // A key the library has not seen gets its row, as rekordbox's "2A" did.
+    let first = audio.path().join("first.wav");
+    tagged(&first, "2A");
+    let a = f.writer.import_file(&first).unwrap();
+    assert_eq!(key_of(&mut f, &a).as_deref(), Some("2A"));
+
+    // A second file with that key shares the row rather than adding one.
+    let second = audio.path().join("second.wav");
+    tagged(&second, "2A");
+    let b = f.writer.import_file(&second).unwrap();
+    assert_eq!(key_of(&mut f, &b).as_deref(), Some("2A"));
+    assert_eq!(f.count("SELECT COUNT(*) FROM djmdKey WHERE ScaleName = '2A'"), 1);
+
+    // No key tag, no key: nothing is invented.
+    let plain = audio.path().join("plain.wav");
+    write_wav(&plain, 1);
+    let c = f.writer.import_file(&plain).unwrap();
+    assert_eq!(key_of(&mut f, &c), None);
+
+    // Reload Tag takes a key the file gained after the import.
+    tagged(&plain, "Fm");
+    f.writer.reload_tags(&c).unwrap();
+    assert_eq!(key_of(&mut f, &c).as_deref(), Some("Fm"));
+}
+
+#[test]
 fn embedded_cover_is_registered_with_thumbnails_and_never_replaces_custom_art() {
     use lofty::config::WriteOptions;
     use lofty::picture::{MimeType, Picture, PictureType};
