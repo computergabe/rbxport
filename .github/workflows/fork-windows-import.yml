@@ -20,6 +20,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: '. -> C:/rbx-target'
+          cache-on-failure: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -33,6 +34,21 @@ jobs:
           'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
           'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
       - run: cargo test -p rbxport --lib import_cli
+      - name: Diagnose native test startup
+        if: failure()
+        shell: pwsh
+        run: |
+          $vs = & 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1
+          $test = Get-ChildItem 'C:\rbx-target\debug\deps\rbxport_lib-*.exe' | Select-Object -First 1
+          & $dumpbin.FullName /imports $test.FullName | Out-File native-imports.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: native-test-diagnostics
+          path: |
+            native-imports.txt
+            C:/rbx-target/debug/deps/rbxport_lib-*.exe
       - run: cargo test -p rbxport --test commands import
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
