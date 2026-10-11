@@ -74,3 +74,23 @@ The queue is replaced atomically with its previous version retained in
 `Bandcamp-Rekordbox.pending.json.previous`. Per-album reports are kept under
 `RBXPORT-Bandcamp/reports`. Neither the queue nor the library import deletes
 music files or starts a persistent folder watcher.
+
+## Local Windows builds
+
+Use Visual Studio Developer PowerShell with the C++ tools, Windows SDK,
+Rust MSVC toolchain, Strawberry Perl, Node, and the pinned pnpm 10.17.1.
+Use a short Cargo output path; long checkout paths can exceed MSVC's file
+path limit while compiling vendored OpenSSL.
+
+```powershell
+$env:CARGO_TARGET_DIR = Join-Path $env:LOCALAPPDATA 'RBXPORT-Build\target'
+$env:OPENSSL_SRC_PERL = 'C:\Strawberry\perl\bin\perl.exe'
+$env:Path = 'C:\Strawberry\perl\bin;' + $env:Path
+$env:RBXPORT_TEST = '1'
+pnpm install --frozen-lockfile
+pnpm tauri build --no-bundle --ci
+```
+
+The executable is under `$env:CARGO_TARGET_DIR\release\rbxport.exe`.
+Use the Tauri builder: a plain Cargo release build does not enable the
+packaged frontend. Fixture checks must stay isolated from installed libraries.

@@ -79,8 +79,10 @@ try {
     if ($left -gt 0 -or $extractionErrors -gt 0 -or $zips -gt 0) {
         Write-Host '  FINISHED — SOME ITEMS NEED ATTENTION' -ForegroundColor Yellow
         $failed = $true
-    } else {
+    } elseif ($tracksImported -gt 0) {
         Write-Host '  MUSIC ADDED TO YOUR REKORDBOX LIBRARY' -ForegroundColor Green
+    } else {
+        Write-Host '  FINISHED — LIBRARY UP TO DATE' -ForegroundColor Green
     }
     Write-Host "  Albums extracted: $extracted   ZIPs skipped: $zipSkipped   Extraction errors: $extractionErrors"
     Write-Host "  Tracks added: $tracksImported   Already in library: $alreadyPresent"

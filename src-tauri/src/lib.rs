@@ -670,14 +670,26 @@ pub fn run() {
     match result {
         Ok(app) => {
             crate::update::Updates::clear_stale(app.handle());
-            app.run(|handle, event| {
+            let import_exit = std::rc::Rc::new(std::cell::Cell::new(1));
+            let requested_exit = std::rc::Rc::clone(&import_exit);
+            let on_run_event = move |handle: &tauri::AppHandle, event: tauri::RunEvent| {
+                if let tauri::RunEvent::ExitRequested { code: Some(code), .. } = &event {
+                    requested_exit.set(*code);
+                }
                 // An update downloaded this run and waiting for the quit
                 // (Windows) is installed now, silently.
                 if matches!(event, tauri::RunEvent::Exit) {
                     crate::screen_cache::save(handle);
                     crate::update::on_exit(handle);
                 }
-            });
+            };
+            if crate::import_cli::requested() {
+                // Wry maps RequestExit to ControlFlow::Exit (zero) on Windows.
+                // Retain the requested status and exit after Tauri's cleanup.
+                app.run_return(on_run_event);
+                std::process::exit(import_exit.get());
+            }
+            app.run(on_run_event);
         }
         Err(e) => {
             tracing::error!(error = %e, "fatal: could not start the application");
