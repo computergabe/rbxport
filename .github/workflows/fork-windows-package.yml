@@ -2,7 +2,7 @@ name: Package Windows import app
 on:
   push:
     branches: [feat/windows-import-command]
-    paths: [.github/workflows/fork-windows-package.yml]
+    paths: [.github/workflows/fork-windows-package.yml, src-tauri/**, crates/**, Cargo.toml, Cargo.lock]
   workflow_dispatch:
 permissions:
   contents: read

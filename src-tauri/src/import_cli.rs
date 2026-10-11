@@ -219,6 +219,6 @@ mod tests {
         let retry = protected_import(app.handle(), paths).unwrap();
         assert_eq!(retry.imported, 0);
         assert_eq!(retry.existing.len(), 1);
-        assert!(retry.skipped.is_empty());
+        assert_eq!(retry.skipped, [] as [String; 0]);
     }
 }
