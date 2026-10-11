@@ -33,7 +33,7 @@ jobs:
         run: |
           'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
           'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
-      - run: cargo build -p rbxport --release
+      - run: pnpm tauri build --no-bundle --ci
       - uses: actions/upload-artifact@v4
         with:
           name: rbxport-windows-import
