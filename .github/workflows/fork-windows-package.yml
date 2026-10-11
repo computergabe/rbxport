@@ -1,5 +1,8 @@
 name: Package Windows import app
 on:
+  push:
+    branches: [feat/windows-import-command]
+    paths: [.github/workflows/fork-windows-package.yml]
   workflow_dispatch:
 permissions:
   contents: read
