@@ -33,8 +33,14 @@ jobs:
         run: |
           'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
           'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
-      - run: pnpm tauri build --no-bundle --ci
+      - name: Build packaged Windows app
+        shell: pwsh
+        run: |
+          # Tauri invokes Cargo from src-tauri. Keep output at the cached root.
+          $env:CARGO_TARGET_DIR = Join-Path $env:GITHUB_WORKSPACE 'target'
+          pnpm tauri build --no-bundle --ci
       - uses: actions/upload-artifact@v4
         with:
           name: rbxport-windows-import
           path: target/release/rbxport.exe
+          if-no-files-found: error
