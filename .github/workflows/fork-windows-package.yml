@@ -18,6 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          prefix-key: v1-native-target
           workspaces: '. -> target'
           cache-on-failure: true
       - uses: pnpm/action-setup@v4
