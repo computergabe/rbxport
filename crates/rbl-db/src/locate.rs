@@ -334,7 +334,7 @@ mod tests {
     fn settings(sources: &Sources, master_dir: &Path) {
         let file = settings_file(sources);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-        let dir = rbl_core::xml::escape(&master_dir.to_string_lossy());
+        let dir = rbl_core::xml::escape(&setting_path(&master_dir.to_string_lossy(), cfg!(windows)));
         std::fs::write(
             file,
             format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\n<PROPERTIES>\n  <VALUE name=\"DeviceLogEnable\" val=\"0\"/>\n  <VALUE name=\"masterDbDirectory\" val=\"{dir}\"/>\n  <VALUE name=\"ColorType\" val=\"3\"/>\n</PROPERTIES>\n"),

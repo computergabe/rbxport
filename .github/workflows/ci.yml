@@ -22,7 +22,9 @@ permissions:
 jobs:
   changes:
     name: Detect affected validation lanes
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Upstream's private runner fleet is not available to community forks.
+    # This fork validates Windows on GitHub-hosted runners in fork-windows-*.yml.
+    if: github.repository == 'chrisle/rbxport' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, linux, x64]
     outputs:
       base_ref: ${{ steps.paths.outputs.base_ref }}
