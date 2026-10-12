@@ -103,3 +103,5 @@ try {
     throw 'Shortcut replacement unexpectedly succeeded.'
 } catch { Assert ($_.Exception.Message -like 'A shortcut already exists:*') 'Unexpected shortcut replacement result.' }
 Write-Output 'PASS: custom paths, Unicode extraction, verification, corrupt/unsafe/duplicate ZIP retention, callback failure, refusal/retry queue, desktop shortcut, and no replacement/watch mode.'
+# CI's PowerShell wrapper otherwise reuses the intentional failed child status.
+exit 0
