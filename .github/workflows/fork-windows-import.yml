@@ -54,4 +54,5 @@ jobs:
             target/debug/deps/rbxport_lib-*.exe
       - run: cargo test -p rbxport --test commands import
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # Run every test target so a failed crate does not hide later failures.
+      - run: cargo test --workspace --no-fail-fast
