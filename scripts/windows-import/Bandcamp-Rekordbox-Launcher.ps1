@@ -46,7 +46,7 @@ try {
     if (Test-Path -LiteralPath $log) { $previousLines = @(Get-Content -LiteralPath $log).Count }
     # The callback persists the verified album before the extractor deletes its ZIP.
     # Run once: never pass -Watch.
-    & $ExtractorPath -OnVerifiedAlbum {
+    & $ExtractorPath -SourceFolder $Inbox -DestinationFolder $CollectionRoot -OnVerifiedAlbum {
         param($album)
         Add-PendingAlbum -QueuePath $queuePath -Album $album -CollectionRoot $CollectionRoot
     } -ErrorAction Stop

@@ -1,0 +1,21 @@
+name: Check Windows PowerShell package
+on:
+  push:
+    branches: [feat/windows-import-command]
+    paths: ['scripts/windows-import/**', '.github/workflows/fork-windows-launcher.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package-fixtures:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      RBXPORT_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PowerShell 5 package with disposable files and mock importer
+        shell: powershell
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'bandcamp-package-fixture'
+          & .\scripts\windows-import\Test-Package.ps1 -FixtureRoot $fixture

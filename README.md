@@ -1,10 +1,79 @@
 <p align="center">
-  <a href="https://rbxport.com">
+  <a href="https://github.com/computergabe/rbxport">
     <img src="docs/assets/brand/combined/rbxport-logo-color-white.png" alt="rbxport" width="360">
   </a>
 </p>
 
-# rbxport
+# rbxport — Windows PowerShell import fork
+
+This public community fork of [chrisle/rbxport](https://github.com/chrisle/rbxport)
+adds **on-demand Windows automation**: extract Bandcamp ZIPs, verify the files,
+and register their tracks in the rekordbox library with one desktop button.
+It is an independent preview build, not an official upstream release.
+
+## Download and use the Windows preview
+
+[Download the Windows x64 package](https://github.com/computergabe/rbxport/releases/tag/windows-import-preview.1)
+or [read the full PowerShell guide](docs/user/windows-import.md).
+The release includes the app, scripts, shortcut setup, license text, checksums,
+and corresponding source. Download users do not need Rust or C++ build tools.
+
+1. Extract the package into a permanent, writable folder; keep its files together.
+2. Open `RBXPORT-Bandcamp/rbxport.exe`. In Preferences, disable **Library
+   Protection** when you intend to permit imports, and disable automatic update
+   checking to keep this custom build. Close RBXPORT afterward.
+3. Open PowerShell in the extracted package folder and create the desktop button:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Create-Desktop-Shortcut.ps1
+   ```
+
+4. Put ZIPs in your `Downloads\Bandcamp` folder, close rekordbox and its tray
+   agent, then click **Bandcamp → Rekordbox**. Reopen rekordbox after it finishes.
+
+The button runs once per click. It verifies file presence and sizes in staging
+and the final `Music\Rekordbox Collection` folder, saves a retry queue, and only
+then deletes each ZIP. It never overwrites an existing album folder. Failed
+library imports remain queued, and retries skip tracks already registered at
+the same path. The launcher never changes Library Protection itself.
+
+### PowerShell automation without the Bandcamp launcher
+
+The custom executable accepts one or more `--import` arguments and a **new**
+JSON report path. It imports once and exits with status 0 for complete success
+or a nonzero status for failure. Existing report files are never overwritten.
+
+```powershell
+$report = Join-Path $env:TEMP ('rbxport-' + [guid]::NewGuid() + '.json')
+$album = 'D:\Music\An Album'
+$arguments = '--import "' + $album.TrimEnd('\') + '" --import-report "' + $report + '"'
+$process = Start-Process -FilePath .\RBXPORT-Bandcamp\rbxport.exe -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+if (-not (Test-Path -LiteralPath $report)) { throw 'No import report was produced.' }
+$result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($process.ExitCode -ne 0 -or -not $result.ok) { throw ($result | ConvertTo-Json -Depth 8) }
+$result.report
+```
+
+This command refuses imports while rekordbox or another RBXPORT instance is
+running and honors Library Protection. It does not watch folders or request
+track analysis. Rekordbox can analyze the imported tracks after reopening.
+
+### Build from source and validation
+
+Use this fork's `feat/windows-import-command` branch or the preview release tag.
+The [local Windows build instructions](docs/user/windows-import.md#local-windows-builds)
+cover Rust, MSVC, the Windows SDK, Perl, Node, and pnpm. Build with the Tauri
+builder so the executable includes its interface.
+
+The preview's native command tests, import integration test, Windows code
+checks, and packaged error/exit check passed. A real run registered 245 tracks
+and they appeared in rekordbox 7.2.19, including 14 tracks from five new ZIPs.
+This is a single-machine result, not a claim of compatibility with every
+rekordbox version. The full Windows workspace suite has 11 unresolved tests
+with Unix-style path expectations; the development PR remains draft.
+Keep a library backup before using the preview.
+
+## About the original project
 
 rbxport is a music library management app inspired by rekordbox. It keeps its
 feature set deliberately small, aiming for a faster, simpler user experience.

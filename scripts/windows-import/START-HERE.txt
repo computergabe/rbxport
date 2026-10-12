@@ -1,0 +1,54 @@
+RBXPORT Windows PowerShell Import Preview
+
+This is an independent community fork of chrisle/rbxport.
+Source: https://github.com/computergabe/rbxport
+Guide: https://github.com/computergabe/rbxport/blob/feat/windows-import-command/docs/user/windows-import.md
+
+SETUP
+1. Extract this whole ZIP into a permanent, writable folder. Do not run from
+   inside the ZIP. Keep the scripts and RBXPORT-Bandcamp folder together.
+2. Back up your rekordbox library.
+3. Open RBXPORT-Bandcamp\rbxport.exe once. In Preferences, turn off Library
+   Protection to permit the requested imports. Turn off automatic update
+   checking so an upstream update does not replace this custom build.
+   Close RBXPORT afterward.
+4. Open PowerShell in this package folder and run:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Create-Desktop-Shortcut.ps1
+
+EACH IMPORT
+Put ZIPs in your Downloads\Bandcamp folder. Close rekordbox, its tray agent,
+and other RBXPORT windows. Double-click Bandcamp -> Rekordbox on your desktop.
+Read the result, press Enter to close, then reopen rekordbox.
+
+Music goes into your actual Windows Music folder, under Rekordbox Collection.
+ZIPs are deleted only after extracted files have been verified by presence and
+size in the final location, and the album has been saved to the retry queue.
+Corrupt ZIPs and ZIPs whose album folder already exists are retained.
+Failed library imports keep the extracted music and remain queued for retry.
+The launcher runs once per click and never changes Library Protection itself.
+
+You may see automatic analysis after reopening rekordbox, depending on its
+settings. This import command does not itself request analysis.
+
+CUSTOM FOLDERS
+Supply -Inbox and -CollectionRoot to Create-Desktop-Shortcut.ps1. Use full
+folder paths without a trailing backslash. The guide includes an example.
+If a shortcut already exists, setup stops instead of replacing it.
+
+RECOVERY
+The pending queue is Bandcamp-Rekordbox.pending.json beside the launcher.
+Import reports are under RBXPORT-Bandcamp\reports. The extraction log is
+Bandcamp-Import.log in your music collection. Failed staging files remain
+under _staging for inspection. Resolve a reported problem and click again.
+If an interrupted run left automation-import.lock, close every RBXPORT
+process before removing %LOCALAPPDATA%\com.rbxport.app\automation-import.lock.
+If another-instance refusal persists after a window closes, check Task Manager
+for a remaining rbxport.exe process.
+
+PREVIEW STATUS
+Focused import tests and Windows code checks passed. A real run was verified
+with rekordbox 7.2.19. The broader Windows suite has unresolved path tests.
+This is not an official upstream release; the binary is unsigned.
+
+GPL-2.0-or-later license, full license text, source links and build provenance
+are included. See LICENSE, GPL-2.0.txt, LICENSING.md and BUILD-INFO.json.
