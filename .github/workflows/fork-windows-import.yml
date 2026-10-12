@@ -1,7 +1,6 @@
 name: Fork Windows import build
 on:
-  push:
-    branches: [feat/windows-import-command]
+  # Releases are tested and built locally. Hosted checks are an explicit opt-in.
   workflow_dispatch:
 permissions:
   contents: read

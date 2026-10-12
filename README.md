@@ -10,11 +10,11 @@ This public community fork of [chrisle/rbxport](https://github.com/chrisle/rbxpo
 adds **on-demand music automation**. Choose your inbox folders and permanent
 music folder, organize ZIPs and individual audio files, and register their
 tracks in the active rekordbox library with a desktop button.
-This is an independent preview, not an official upstream release.
+This is an independent Windows release, not an official upstream release.
 
 ## Download and set up
 
-[Download the Windows x64 music preview](https://github.com/computergabe/rbxport/releases/tag/windows-music-preview.2)
+[Download the Windows x64 music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.0)
 or [read the setup and PowerShell guide](docs/user/windows-import.md).
 
 1. Extract the package to a permanent writable folder.
@@ -71,14 +71,16 @@ The app supports repeated `--import <path>` arguments with
 
 See the [PowerShell guide](docs/user/windows-import.md) for examples, reports,
 recovery, Windows prerequisites, Tauri builds, and packaging instructions.
-Use this fork's default branch or the music-preview tag.
+Use this fork's default branch or the `windows-music-1.2.0` release tag.
 
-Focused native import and metadata tests, an import integration test, Windows
-Clippy checks, and disposable PowerShell file-handling fixtures pass.
+The full Windows workspace suite and Clippy checks pass locally, along with
+frontend lint, unit, build, bundle-budget, Chromium UI, and disposable
+PowerShell file-handling checks. Regression tests cover Windows folders,
+short paths, junctions, drive letters, and file locking. GitHub hosts the
+finished source and release; hosted builds are optional manual workflows.
 Direct library import was verified on rekordbox 7.2.19. This is not a claim of
-compatibility with every version or drive arrangement. The full Windows
-workspace suite has 11 unresolved tests with Unix-style path expectations;
-the development PR remains draft. Keep a library backup before preview use.
+compatibility with every version or drive arrangement. Keep a library backup
+before use.
 
 ## About the original project
 

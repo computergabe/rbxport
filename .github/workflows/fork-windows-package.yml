@@ -1,8 +1,6 @@
 ﻿name: Package Windows import app
 on:
-  push:
-    branches: [feat/windows-import-command]
-    paths: [.github/workflows/fork-windows-package.yml, src-tauri/**, crates/**, Cargo.toml, Cargo.lock]
+  # Releases are tested and built locally. Hosted builds are an explicit opt-in.
   workflow_dispatch:
 permissions:
   contents: read

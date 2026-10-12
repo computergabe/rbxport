@@ -103,7 +103,7 @@ function Read-MusicTags {
     Write-MusicJson $inputPath @($Paths)
     $arguments = '--inspect-list "' + $inputPath + '" --inspect-report "' + $reportPath + '"'
     $process = Start-Process -FilePath $Executable -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
-    if (-not (Test-Path -LiteralPath $reportPath)) { throw 'The app did not return a metadata report. Use the universal music preview build.' }
+    if (-not (Test-Path -LiteralPath $reportPath)) { throw 'The app did not return a metadata report. Use the RBXPORT app included in this music package.' }
     $result = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($process.ExitCode -ne 0 -or $result.ok -ne $true) { throw "Audio metadata could not be read. Original retained. Report: $reportPath" }
     $map = @{}

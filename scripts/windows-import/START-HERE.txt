@@ -1,4 +1,4 @@
-﻿MUSIC TO REKORDBOX - WINDOWS PREVIEW
+﻿MUSIC TO REKORDBOX - WINDOWS RELEASE
 
 1. Keep this extracted package in a permanent writable folder.
 2. Open RBXPORT-Music\rbxport.exe once.
@@ -17,6 +17,6 @@ Use this for new downloads; it does not migrate already-registered music.
 Select the intended library in rekordbox first; external drives must be connected.
 
 Read POWERSHELL-GUIDE.md for setup, formats, verification, errors, and recovery.
-This unsigned independent preview is not an official upstream release.
+This unsigned independent release is not an official upstream release.
 Source: https://github.com/computergabe/rbxport
 License: GPL-2.0-or-later. License text and build information are included.

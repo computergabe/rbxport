@@ -65,8 +65,12 @@ fn ok_reader(reply: &[u8]) -> Reader<'_> {
 
 /// Mounts `/` and returns the root handle.
 fn mount_root(server: &Server) -> Handle {
+    mount_export(server, "/")
+}
+
+fn mount_export(server: &Server, name: &str) -> Handle {
     let mut args = Writer::new();
-    args.utf16("/");
+    args.utf16(name);
     let reply = ask(server, PROGRAM_MOUNT, VERSION_MOUNT, mount_proc::MNT, args.into_bytes());
     let mut reader = ok_reader(&reply);
     assert_eq!(reader.u32().unwrap(), nfs_status::OK);
@@ -1158,7 +1162,7 @@ fn portmap_dumps_its_three_mappings() {
 /// library's folders look like to a player. The folder holds a track, a
 /// subfolder with another, a file the library does not know, and a symlink
 /// out; beside it sits a file that must stay out of reach.
-fn folder_fixture() -> (tempfile::TempDir, Server, String) {
+fn folder_fixture() -> (tempfile::TempDir, Server, String, String) {
     let dir = tempfile::tempdir().unwrap();
     let music = dir.path().join("Music");
     fs::create_dir_all(music.join("Artist/Album")).unwrap();
@@ -1170,17 +1174,17 @@ fn folder_fixture() -> (tempfile::TempDir, Server, String) {
     std::os::unix::fs::symlink(dir.path().join("beside.mp3"), music.join("link.mp3")).unwrap();
 
     let (export, folder) = split_export(music.to_str().unwrap()).unwrap();
-    let mut vfs = Vfs::new(export);
+    let mut vfs = Vfs::new(&export);
     vfs.allow_folder(&folder, &music);
     let mut exports = Exports::new();
     exports.insert(vfs);
-    (dir, Server::new(exports, NFS_PORT, MOUNT_PORT), folder)
+    (dir, Server::new(exports, NFS_PORT, MOUNT_PORT), folder, export)
 }
 
 #[test]
 fn a_track_under_an_allowed_folder_is_found_and_read_without_being_registered() {
-    let (_dir, server, folder) = folder_fixture();
-    let root = mount_root(&server);
+    let (_dir, server, folder, export) = folder_fixture();
+    let root = mount_export(&server, &export);
     let one = lookup_path(&server, &root, &format!("{folder}/Artist/Album/one.mp3")).unwrap();
     assert_eq!(read_whole(&server, &one), vec![1_u8; 3_000]);
     let loose = lookup_path(&server, &root, &format!("{folder}/Artist/loose.mp3")).unwrap();
@@ -1191,8 +1195,8 @@ fn a_track_under_an_allowed_folder_is_found_and_read_without_being_registered() 
 
 #[test]
 fn nothing_beside_or_above_an_allowed_folder_resolves() {
-    let (dir, server, folder) = folder_fixture();
-    let root = mount_root(&server);
+    let (dir, server, folder, export) = folder_fixture();
+    let root = mount_export(&server, &export);
     let (_, beside) = split_export(dir.path().join("beside.mp3").to_str().unwrap()).unwrap();
     assert_eq!(lookup_path(&server, &root, &beside), Err(nfs_status::NOENT));
     // The folders on the way exist, but only the way is in them: the temp
@@ -1212,8 +1216,8 @@ fn nothing_beside_or_above_an_allowed_folder_resolves() {
 #[cfg(unix)]
 #[test]
 fn a_symlink_in_an_allowed_folder_is_not_followed() {
-    let (_dir, server, folder) = folder_fixture();
-    let root = mount_root(&server);
+    let (_dir, server, folder, export) = folder_fixture();
+    let root = mount_export(&server, &export);
     assert_eq!(lookup_path(&server, &root, &format!("{folder}/link.mp3")), Err(nfs_status::NOENT));
     let allowed = lookup_path(&server, &root, &folder).unwrap();
     let names = list(&server, &allowed, 8192);
@@ -1222,8 +1226,8 @@ fn a_symlink_in_an_allowed_folder_is_not_followed() {
 
 #[test]
 fn an_allowed_folder_lists_what_the_host_has_and_a_decomposed_name_finds_a_composed_file() {
-    let (_dir, server, folder) = folder_fixture();
-    let root = mount_root(&server);
+    let (_dir, server, folder, export) = folder_fixture();
+    let root = mount_export(&server, &export);
     let allowed = lookup_path(&server, &root, &folder).unwrap();
     let names = list(&server, &allowed, 8192);
     assert!(names.iter().any(|n| n == "Artist"), "{names:?}");

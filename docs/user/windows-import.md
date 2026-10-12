@@ -6,7 +6,7 @@ background watcher.
 
 ## Download and first setup
 
-Download the [Windows music preview](https://github.com/computergabe/rbxport/releases/tag/windows-music-preview.2).
+Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.0).
 The unsigned package needs Windows x64, Windows PowerShell 5.1, and WebView2.
 Build tools are only needed to compile from source.
 
@@ -208,9 +208,36 @@ Cargo output path to avoid MSVC path limits while building vendored OpenSSL.
 $env:CARGO_TARGET_DIR = Join-Path $env:LOCALAPPDATA 'RBXPORT-Build\target'
 $env:OPENSSL_SRC_PERL = 'C:\Strawberry\perl\bin\perl.exe'
 $env:Path = 'C:\Strawberry\perl\bin;' + $env:Path
+$env:LC_ALL = 'C'
+$env:LANG = 'C'
+$env:LC_CTYPE = 'C'
 $env:RBXPORT_TEST = '1'
 pnpm install --frozen-lockfile
+```
+
+Before publishing, run the full local checks below, stopping to fix any command
+that fails. Python must be available as `python3` for the browser test server.
+Chromium represents the Windows WebView2 frontend; these are mock-backed UI
+tests, separate from the native database tests.
+
+```powershell
+pnpm lint
+pnpm build
+pnpm test
+pnpm budget
+pnpm exec playwright install chromium
+pnpm exec playwright test --project=chromium
+cargo clippy --workspace --all-targets --release --features tauri/custom-protocol -- -D warnings
+cargo test --workspace --release --features tauri/custom-protocol --no-fail-fast
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-import\Test-Package.ps1 -FixtureRoot (Join-Path $env:TEMP ([guid]::NewGuid().ToString('N')))
+```
+
+After those checks pass, build the downloadable app locally and exercise its
+metadata command through the real organizer with disposable files:
+
+```powershell
 pnpm tauri build --no-bundle --ci
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-import\Test-Native-Organizer.ps1 -Executable "$env:CARGO_TARGET_DIR\release\rbxport.exe" -FixtureRoot (Join-Path $env:TEMP ([guid]::NewGuid().ToString('N')))
 ```
 
 The app is at `$env:CARGO_TARGET_DIR\release\rbxport.exe`. Use the Tauri
@@ -218,9 +245,13 @@ builder to include the frontend. Development checks must use disposable
 fixtures with `RBXPORT_TEST=1`, never the installed library.
 
 Focused native import and metadata tests, import integration tests, and
-Windows Clippy checks pass. The broader Windows workspace suite has 11
-unresolved tests with Unix-style path expectations. The PR remains draft;
-this download is a preview, not a compatibility guarantee.
+Windows Clippy checks pass, together with the full Windows workspace suite.
+Windows folder/junction detection and platform-specific path fixtures have
+regression coverage. This release does not guarantee compatibility with every
+rekordbox version, device, or storage arrangement.
+
+GitHub hosts the finished source and download. This fork's hosted Windows
+build/test workflows run only when manually requested, not on each push.
 
 ## Package your build
 
@@ -233,7 +264,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-import
 
 The ZIP includes scripts, icon, app, guide, licenses, and `BUILD-INFO.json`
 with hashes and source commits. Publish corresponding source and checksums
-alongside it. This fork uses its own GitHub preview releases, not the upstream
+alongside it. This fork uses its own GitHub releases, not the upstream
 deployment workflow.
 
 Check the scripts with Windows PowerShell 5.1:
