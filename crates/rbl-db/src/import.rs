@@ -23,6 +23,7 @@ pub const AUDIO_EXTENSIONS: &[&str] =
 pub struct TrackTags {
     pub title: String,
     pub artist: String,
+    pub album_artist: String,
     pub album: String,
     pub genre: String,
     pub label: String,
@@ -138,6 +139,7 @@ pub fn read_tags(path: &Path) -> Result<TrackTags, ImportError> {
         let text = |key: &ItemKey| tag.get_string(key).unwrap_or_default().to_owned();
         tags.title = text(&ItemKey::TrackTitle);
         tags.artist = text(&ItemKey::TrackArtist);
+        tags.album_artist = text(&ItemKey::AlbumArtist);
         tags.album = text(&ItemKey::AlbumTitle);
         tags.genre = text(&ItemKey::Genre);
         tags.label = text(&ItemKey::Label);

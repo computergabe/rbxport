@@ -10,6 +10,7 @@ mod file_drop;
 mod file_drag;
 mod startup;
 mod import_cli;
+mod music_inspect;
 mod screen_cache;
 mod sentry;
 pub mod analysis;
@@ -56,6 +57,11 @@ pub use error::{AppError, AppResult, ErrorKind};
 /// Runs the protected Windows update entry point before Tauri starts.
 pub fn run_elevated_update_helper_if_requested() -> Option<i32> {
     update::run_elevated_helper_if_requested()
+}
+
+/// Reads audio metadata for inbox scripts without opening a rekordbox library.
+pub fn run_music_inspect_if_requested() -> Option<i32> {
+    music_inspect::run_if_requested()
 }
 
 use state::AppState;

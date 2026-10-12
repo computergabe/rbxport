@@ -35,6 +35,7 @@ jobs:
           'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
           'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
       - run: cargo test -p rbxport --lib import_cli
+      - run: cargo test -p rbxport --lib music_inspect
       - name: Diagnose native test startup
         if: failure()
         shell: pwsh
