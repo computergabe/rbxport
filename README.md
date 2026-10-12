@@ -1,77 +1,84 @@
-<p align="center">
+﻿<p align="center">
   <a href="https://github.com/computergabe/rbxport">
     <img src="docs/assets/brand/combined/rbxport-logo-color-white.png" alt="rbxport" width="360">
   </a>
 </p>
 
-# rbxport — Windows PowerShell import fork
+# rbxport — Music to Rekordbox for Windows
 
 This public community fork of [chrisle/rbxport](https://github.com/chrisle/rbxport)
-adds **on-demand Windows automation**: extract Bandcamp ZIPs, verify the files,
-and register their tracks in the rekordbox library with one desktop button.
-It is an independent preview build, not an official upstream release.
+adds **on-demand music automation**. Choose your inbox folders and permanent
+music folder, organize ZIPs and individual audio files, and register their
+tracks in the active rekordbox library with a desktop button.
+This is an independent preview, not an official upstream release.
 
-## Download and use the Windows preview
+## Download and set up
 
-[Download the Windows x64 package](https://github.com/computergabe/rbxport/releases/tag/windows-import-preview.1)
-or [read the full PowerShell guide](docs/user/windows-import.md).
-The release includes the app, scripts, shortcut setup, license text, checksums,
-and corresponding source. Download users do not need Rust or C++ build tools.
+[Download the Windows x64 music preview](https://github.com/computergabe/rbxport/releases/tag/windows-music-preview.2)
+or [read the setup and PowerShell guide](docs/user/windows-import.md).
 
-1. Extract the package into a permanent, writable folder; keep its files together.
-2. Open `RBXPORT-Bandcamp/rbxport.exe`. In Preferences, disable **Library
-   Protection** when you intend to permit imports, and disable automatic update
-   checking to keep this custom build. Close RBXPORT afterward.
-3. Open PowerShell in the extracted package folder and create the desktop button:
+1. Extract the package to a permanent writable folder.
+2. Open the included RBXPORT app once. Disable Library Protection when you
+   intend to allow imports, and disable automatic update checking to retain
+   this custom build. Close the app.
+3. Open PowerShell in the extracted folder and run:
 
    ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Create-Desktop-Shortcut.ps1
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
    ```
 
-4. Put ZIPs in your `Downloads\Bandcamp` folder, close rekordbox and its tray
-   agent, then click **Bandcamp → Rekordbox**. Reopen rekordbox after it finishes.
+4. Choose your source folders or individual files, **WHERE SONGS LIVE** storage
+   folder, layout, Copy or Move policy, and library-import preference.
+5. Close rekordbox and its tray agent, then click **Music → Rekordbox**.
+   Reopen rekordbox after it finishes.
 
-The button runs once per click. It verifies file presence and sizes in staging
-and the final `Music\Rekordbox Collection` folder, saves a retry queue, and only
-then deletes each ZIP. It never overwrites an existing album folder. Failed
-library imports remain queued, and retries skip tracks already registered at
-the same path. The launcher never changes Library Protection itself.
+The setup creates the button and saves your preferences for later clicks.
+Downloads need no compiler tools. The release includes scripts, the app, an
+icon, licenses, checksums, and corresponding source.
 
-### PowerShell automation without the Bandcamp launcher
+## Use your own music system
 
-The custom executable accepts one or more `--import` arguments and a **new**
-JSON report path. It imports once and exits with status 0 for complete success
-or a nonzero status for failure. Existing report files are never overwritten.
+Select multiple inboxes, include subfolders if desired, and choose music
+storage on an available local/external drive or accessible network share.
+The storage folder can have any name; “WHERE SONGS LIVE” is the setup label.
 
-```powershell
-$report = Join-Path $env:TEMP ('rbxport-' + [guid]::NewGuid() + '.json')
-$album = 'D:\Music\An Album'
-$arguments = '--import "' + $album.TrimEnd('\') + '" --import-report "' + $report + '"'
-$process = Start-Process -FilePath .\RBXPORT-Bandcamp\rbxport.exe -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
-if (-not (Test-Path -LiteralPath $report)) { throw 'No import report was produced.' }
-$result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($process.ExitCode -ne 0 -or -not $result.ok) { throw ($result | ConvertTo-Json -Depth 8) }
-$result.report
-```
+- **Artist/Album/Filename:** reads embedded tags; prefers Album Artist with
+  Track Artist fallback. Missing tags use Unknown Artist/Unknown Album.
+- **Preserve folders:** keeps ZIP structure and loose files' relative paths.
+- **Flat:** puts audio directly in the chosen storage folder.
 
-This command refuses imports while rekordbox or another RBXPORT instance is
-running and honors Library Protection. It does not watch folders or request
-track analysis. Rekordbox can analyze the imported tracks after reopening.
+Copy keeps original downloads and is the default. Move removes originals
+only after verified storage and a durable retry queue. ZIP extras such as
+artwork are preserved separately. Different files with the same destination
+name receive a content-hash suffix; existing audio is not overwritten.
+Recognized formats and file-handling details are in the guide.
 
-### Build from source and validation
+The button runs once per click. It verifies extraction and SHA-256 copies,
+then imports queued audio paths. Failed imports stay queued, and retries skip
+paths already in the library. It honors Library Protection.
 
-Use this fork's `feat/windows-import-command` branch or the preview release tag.
-The [local Windows build instructions](docs/user/windows-import.md#local-windows-builds)
-cover Rust, MSVC, the Windows SDK, Perl, Node, and pnpm. Build with the Tauri
-builder so the executable includes its interface.
+Music storage and the rekordbox database may be on different drives. The app
+uses rekordbox's configured library location; choose the intended library in
+rekordbox before closing it. **No rekordbox.xml is needed for this workflow.**
+This is for new downloads; it does not relocate tracks already in a collection.
+Existing working launchers and music are not automatically migrated.
 
-The preview's native command tests, import integration test, Windows code
-checks, and packaged error/exit check passed. A real run registered 245 tracks
-and they appeared in rekordbox 7.2.19, including 14 tracks from five new ZIPs.
-This is a single-machine result, not a claim of compatibility with every
-rekordbox version. The full Windows workspace suite has 11 unresolved tests
-with Unix-style path expectations; the development PR remains draft.
-Keep a library backup before using the preview.
+## PowerShell and building from source
+
+The app supports repeated `--import <path>` arguments with
+`--import-report <new.json>`, and read-only audio metadata inspection with
+`--inspect-list <paths.json> --inspect-report <new.json>`.
+
+See the [PowerShell guide](docs/user/windows-import.md) for examples, reports,
+recovery, Windows prerequisites, Tauri builds, and packaging instructions.
+Use this fork's default branch or the music-preview tag.
+
+Focused native import and metadata tests, an import integration test, Windows
+Clippy checks, and disposable PowerShell file-handling fixtures pass.
+Direct library import was verified on rekordbox 7.2.19. This is not a claim of
+compatibility with every version or drive arrangement. The full Windows
+workspace suite has 11 unresolved tests with Unix-style path expectations;
+the development PR remains draft. Keep a library backup before preview use.
 
 ## About the original project
 

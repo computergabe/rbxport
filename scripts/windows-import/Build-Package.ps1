@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$Executable,
     [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{40}$')][string]$BinarySourceCommit,
     [Parameter(Mandatory=$true)][string]$OutputDirectory
@@ -12,13 +12,13 @@ if ((Get-Item -LiteralPath $Executable).Length -lt 10000000) { throw 'The compil
 & git -C $repo cat-file -e ($BinarySourceCommit + '^{commit}')
 if ($LASTEXITCODE -ne 0) { throw 'Binary source commit is unavailable in this checkout.' }
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$appFolder = Join-Path $output 'RBXPORT-Bandcamp'
+$appFolder = Join-Path $output 'RBXPORT-Music'
 New-Item -ItemType Directory -Path $appFolder | Out-Null
 Copy-Item -LiteralPath $Executable -Destination (Join-Path $appFolder 'rbxport.exe')
-foreach ($name in @('Bandcamp-Rekordbox.ps1','Bandcamp-Rekordbox-Launcher.ps1','Bandcamp-Rekordbox-Queue.psm1','Create-Desktop-Shortcut.ps1','START-HERE.txt')) {
+foreach ($name in @('Music-To-Rekordbox.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1','START-HERE.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $output
 }
-Copy-Item -LiteralPath (Join-Path $repo 'src-tauri\icons\icon.ico') -Destination (Join-Path $output 'Bandcamp-Rekordbox.ico')
+Copy-Item -LiteralPath (Join-Path $repo 'src-tauri\icons\icon.ico') -Destination (Join-Path $output 'Music-Rekordbox.ico')
 foreach ($name in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $repo $name) -Destination $output }
 Copy-Item -LiteralPath (Join-Path $repo 'crates\rbl-deck\vendor\rubberband\COPYING') -Destination (Join-Path $output 'GPL-2.0.txt')
 Copy-Item -LiteralPath (Join-Path $repo 'docs\user\windows-import.md') -Destination (Join-Path $output 'POWERSHELL-GUIDE.md')

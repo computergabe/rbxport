@@ -1,4 +1,4 @@
-name: Check Windows PowerShell package
+﻿name: Check Windows PowerShell package
 on:
   push:
     branches: [feat/windows-import-command]
@@ -17,5 +17,5 @@ jobs:
       - name: Verify PowerShell 5 package with disposable files and mock importer
         shell: powershell
         run: |
-          $fixture = Join-Path $env:RUNNER_TEMP 'bandcamp-package-fixture'
+          $fixture = Join-Path $env:RUNNER_TEMP 'music-package-fixture'
           & .\scripts\windows-import\Test-Package.ps1 -FixtureRoot $fixture

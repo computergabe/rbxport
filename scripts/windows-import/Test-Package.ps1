@@ -1,107 +1,133 @@
-param([Parameter(Mandatory=$true)][string]$FixtureRoot)
-$ErrorActionPreference = 'Stop'
-if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Run this fixture check with Windows PowerShell 5.' }
+﻿param([Parameter(Mandatory=$true)][string]$FixtureRoot)
+$ErrorActionPreference='Stop'
+if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Use Windows PowerShell 5.1.' }
 if (Test-Path -LiteralPath $FixtureRoot) { throw 'Choose a new fixture directory.' }
-$root = [System.IO.Path]::GetFullPath($FixtureRoot)
-$inbox = Join-Path $root 'Inbox'
-$music = Join-Path $root 'Music Collection'
-$desktop = Join-Path $root 'Desktop'
-$appFolder = Join-Path $root 'RBXPORT-Bandcamp'
-foreach ($path in @($root,$inbox,$music,$desktop,$appFolder)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
-foreach ($name in @('Bandcamp-Rekordbox.ps1','Bandcamp-Rekordbox-Launcher.ps1','Bandcamp-Rekordbox-Queue.psm1','Create-Desktop-Shortcut.ps1')) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $root
-    $tokens = $null; $errors = $null
-    [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root $name),[ref]$tokens,[ref]$errors) | Out-Null
-    if ($errors.Count) { throw ($errors.Message -join '; ') }
+$root=[IO.Path]::GetFullPath($FixtureRoot)
+$inbox=Join-Path $root 'Inbox'
+$other=Join-Path $root 'Other'
+$music=Join-Path $root 'WHERE SONGS LIVE'
+$package=Join-Path $root 'Launcher'
+$app=Join-Path $package 'RBXPORT-Music'
+$reports=Join-Path $package 'reports'
+$desktop=Join-Path $root 'Desktop'
+foreach($path in @($root,$inbox,$other,$music,$app,$reports,$desktop)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
+foreach($name in @('Music-To-Rekordbox.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1')) {
+ Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $package
+ $tokens=$null; $errors=$null
+ [Management.Automation.Language.Parser]::ParseFile((Join-Path $package $name),[ref]$tokens,[ref]$errors) | Out-Null
+ if($errors.Count) {throw ($errors.Message -join '; ')}
 }
-$mock = @'
+$mock=@'
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Web.Script.Serialization;
-class MockImport {
-  static int Main(string[] args) {
-    string album=args[1], report=args[3], root=AppDomain.CurrentDomain.BaseDirectory;
-    var json=new JavaScriptSerializer();
-    if (album.Contains("refuse") && !File.Exists(Path.Combine(root,"allow"))) {
-      File.WriteAllText(report,json.Serialize(new {ok=false,error="Fixture refusal"})); return 1;
-    }
-    File.WriteAllText(report,json.Serialize(new {ok=true,report=new {
-      imported=1,tracks=new object[]{new {id="fixture"}},existing=new object[0],skipped=new string[0]
-    }})); return 0;
+class MusicMock {
+ static int Main(string[] args) {
+  var json=new JavaScriptSerializer(); string report=args[args.Length-1];
+  if(args[0]=="--inspect-list") {
+   var files=new List<object>();
+   foreach(string path in json.Deserialize<string[]>(File.ReadAllText(args[1]))) {
+    if(path.Contains("bad-tags")) {File.WriteAllText(report,json.Serialize(new {ok=false,errors=new[]{"Unreadable audio"}})); return 1;}
+    bool empty=path.Contains("missing-tags");
+    files.Add(new {path=path,artist=empty?"":"Track Artist",albumArtist=empty?"":"Album Artist",album=empty?"":"Fixture Album"});
+   }
+   File.WriteAllText(report,json.Serialize(new {ok=true,files=files,errors=new string[0]})); return 0;
   }
+  if(File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"refuse"))) {
+   File.WriteAllText(report,json.Serialize(new {ok=false,error="Fixture library refusal"})); return 1;
+  }
+  var tracks=new List<object>(); for(int i=0;i<args.Length-2;i+=2) tracks.Add(new {id="fixture",path=args[i+1]});
+  File.WriteAllText(report,json.Serialize(new {ok=true,report=new {imported=tracks.Count,tracks=tracks,existing=new object[0],skipped=new string[0]}})); return 0;
+ }
 }
 '@
-Add-Type -TypeDefinition $mock -ReferencedAssemblies 'System.Web.Extensions' -OutputAssembly (Join-Path $appFolder 'rbxport.exe') -OutputType ConsoleApplication
-function Assert($condition, $message) { if (-not $condition) { throw $message } }
-function MakeZip($name) {
-    $payload = Join-Path $root ('payload-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $payload | Out-Null
-    [System.IO.File]::WriteAllBytes((Join-Path $payload 'track.wav'),[byte[]](0..255))
-    $zip = Join-Path $inbox ($name + '.zip')
-    Compress-Archive -LiteralPath (Join-Path $payload 'track.wav') -DestinationPath $zip
-    $zip
+$exe=Join-Path $app 'rbxport.exe'
+Add-Type -TypeDefinition $mock -ReferencedAssemblies 'System.Web.Extensions' -OutputAssembly $exe -OutputType ConsoleApplication
+Import-Module (Join-Path $package 'Music-Import.Core.psm1') -Force -DisableNameChecking
+function Assert($condition,[string]$message) {if(-not $condition){throw $message}}
+function Audio([string]$path,[byte]$value=1) {[IO.File]::WriteAllBytes($path,[byte[]]($value,$value,3,4));$path}
+function Run([int]$expected) {
+ & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Music-To-Rekordbox.ps1') -NoPause
+ Assert ($LASTEXITCODE -eq $expected) "Unexpected exit: $LASTEXITCODE"
 }
-function RunLauncher($expected) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'Bandcamp-Rekordbox-Launcher.ps1') -Inbox $inbox -CollectionRoot $music -NoPause
-    Assert ($LASTEXITCODE -eq $expected) "Unexpected launcher exit status: $LASTEXITCODE"
+$loose=Audio (Join-Path $other ('solo '+[char]0x65B0+'.wav'))
+$payload=Join-Path $root 'payload'
+New-Item -ItemType Directory -Path (Join-Path $payload 'nested') -Force | Out-Null
+$track=Audio (Join-Path $payload 'nested\track.wav')
+[IO.File]::WriteAllText((Join-Path $payload 'cover.txt'),'extras preserved')
+$zip=Join-Path $inbox 'album.zip'
+Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $zip
+& (Join-Path $package 'Setup-Music-Import.ps1') -Sources @($inbox,$loose) -MusicRoot $music -Originals Move -NonInteractive -NoShortcut -OrganizeOnly
+Run 0
+Assert (-not (Test-Path -LiteralPath $zip)) 'ZIP retained in Move mode.'
+Assert (-not (Test-Path -LiteralPath $loose)) 'Standalone track retained in Move mode.'
+$organized=Join-Path $music 'Album Artist\Fixture Album\track.wav'
+Assert ((Get-FileHash -LiteralPath $organized).Hash -eq (Get-FileHash -LiteralPath $track).Hash) 'Audio changed.'
+Assert (@(Get-ChildItem -LiteralPath (Join-Path $music '_archive-extras') -Recurse -Filter cover.txt).Count -eq 1) 'Extras lost.'
+$queue=Join-Path $package 'Music-Import.pending.json'
+Assert (@(Get-MusicPending $queue).Count -eq 2) 'Tracks not queued.'
+Run 0
+Assert (@(Get-MusicPending $queue).Count -eq 2) 'Consumed individual source broke a repeat run.'
+$configPath=Join-Path $package 'Music-Import.config.json'
+$config=Read-MusicSettings $configPath
+$config.sources=@($inbox,$other); Write-MusicJson $configPath $config
+$collision=Audio (Join-Path $other 'track.wav') 2
+$missing=Audio (Join-Path $other 'missing-tags.wav') 3
+Run 0
+Assert (@(Get-ChildItem -LiteralPath (Split-Path $organized) -Filter 'track*.wav').Count -eq 2) 'Collision overwritten.'
+Assert (Test-Path -LiteralPath (Join-Path $music 'Unknown Artist\Unknown Album\missing-tags.wav')) 'Missing tags failed.'
+Assert ((Get-FileHash -LiteralPath $organized).Hash -eq (Get-FileHash -LiteralPath $track).Hash) 'Original destination changed.'
+$copy=Audio (Join-Path $other 'copy.wav')
+$config.originals='Copy'; Write-MusicJson $configPath $config
+Run 0
+$before=@(Get-MusicPending $queue).Count
+Run 0
+Assert (Test-Path -LiteralPath $copy) 'Copy source deleted.'
+Assert (@(Get-MusicPending $queue).Count -eq $before) 'Repeat duplicated queue.'
+$refuse=Join-Path $app 'refuse'; New-Item -ItemType File -Path $refuse | Out-Null
+try {Invoke-MusicLibraryImport $exe @(Get-MusicPending $queue) $music $reports | Out-Null; throw 'Refusal accepted.'}
+catch {Assert ($_.Exception.Message -like '*Fixture library refusal*') 'Unexpected refusal error.'}
+Assert (@(Get-MusicPending $queue).Count -eq $before) 'Refusal lost queue.'
+Remove-Item -LiteralPath $refuse
+$result=Invoke-MusicLibraryImport $exe @(Get-MusicPending $queue) $music $reports
+Assert ($result.imported -eq $before) 'Import omitted tracks.'
+Write-MusicJson $queue @{version=1;files=@()}
+if(-not (Get-Process | Where-Object {$_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$'})) {
+ $config.importToRekordbox=$true; Write-MusicJson $configPath $config; Run 0
+ Assert (@(Get-MusicPending $queue).Count -eq 0) 'Completed import remained queued.'
 }
-$queue = Join-Path $root 'Bandcamp-Rekordbox.pending.json'
-$album = 'Public album ' + [char]0x2014 + ' ' + [char]0x65B0
-$zip = MakeZip $album
-RunLauncher 0
-Assert (-not (Test-Path -LiteralPath $zip)) 'Verified ZIP was retained.'
-Assert ((Get-Item -LiteralPath (Join-Path $music ($album + '\track.wav'))).Length -eq 256) 'Custom-folder extraction differs.'
-Assert (@((Get-Content -LiteralPath $queue -Raw -Encoding UTF8 | ConvertFrom-Json).albums).Count -eq 0) 'Completed album remains queued.'
-$zip = MakeZip 'refuse album'
-RunLauncher 1
-Assert (-not (Test-Path -LiteralPath $zip)) 'Verified ZIP was retained after library refusal.'
-Assert (@((Get-Content -LiteralPath $queue -Raw -Encoding UTF8 | ConvertFrom-Json).albums).Count -eq 1) 'Refused album was lost.'
-New-Item -ItemType File -Path (Join-Path $appFolder 'allow') | Out-Null
-RunLauncher 0
-Assert (@((Get-Content -LiteralPath $queue -Raw -Encoding UTF8 | ConvertFrom-Json).albums).Count -eq 0) 'Retry did not clear the queue.'
-$bad = Join-Path $inbox 'corrupt.zip'
-[System.IO.File]::WriteAllText($bad,'not a ZIP')
-RunLauncher 1
-Assert (Test-Path -LiteralPath $bad) 'Corrupt ZIP was deleted.'
+$config.importToRekordbox=$false; $config.originals='Move'; Write-MusicJson $configPath $config
+$bad=Join-Path $inbox 'corrupt.zip'; [IO.File]::WriteAllText($bad,'not a ZIP')
+$badTags=Audio (Join-Path $other 'bad-tags.wav')
+Run 1
+Assert ((Test-Path -LiteralPath $bad) -and (Test-Path -LiteralPath $badTags)) 'Failed originals deleted.'
+Remove-Item -LiteralPath $bad
+Remove-Item -LiteralPath $badTags
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-function MakeRawZip($name, [string[]]$entries) {
-    $path = Join-Path $inbox ($name + '.zip')
-    $archive = [System.IO.Compression.ZipFile]::Open($path,[System.IO.Compression.ZipArchiveMode]::Create)
-    try {
-        foreach ($entry in $entries) {
-            $stream = $archive.CreateEntry($entry).Open()
-            try { $stream.WriteByte(7) } finally { $stream.Dispose() }
-        }
-    } finally { $archive.Dispose() }
-    $path
-}
-$unsafe = MakeRawZip 'unsafe' @('../escape.wav')
-$duplicate = MakeRawZip 'duplicate' @('track.wav','TRACK.wav')
-RunLauncher 1
-Assert (Test-Path -LiteralPath $unsafe) 'Unsafe ZIP was deleted.'
-Assert (Test-Path -LiteralPath $duplicate) 'Duplicate-path ZIP was deleted.'
-Assert (-not (Test-Path -LiteralPath (Join-Path $music '_staging\escape.wav'))) 'Unsafe ZIP escaped its staging folder.'
-$callbackInbox = Join-Path $root 'Callback Inbox'
-$callbackMusic = Join-Path $root 'Callback Music'
-New-Item -ItemType Directory -Path $callbackInbox | Out-Null
-$callbackZip = MakeZip 'callback failure'
-Move-Item -LiteralPath $callbackZip -Destination $callbackInbox
-& (Join-Path $root 'Bandcamp-Rekordbox.ps1') -SourceFolder $callbackInbox -DestinationFolder $callbackMusic -OnVerifiedAlbum { throw 'Fixture queue persistence failure' }
-Assert (Test-Path -LiteralPath (Join-Path $callbackInbox 'callback failure.zip')) 'Callback failure deleted its ZIP.'
-& (Join-Path $root 'Create-Desktop-Shortcut.ps1') -DesktopDirectory $desktop -Inbox $inbox -CollectionRoot $music
-$shortcut = Get-ChildItem -LiteralPath $desktop -Filter '*.lnk'
-Assert (@($shortcut).Count -eq 1) 'Shortcut was not created.'
-$inspection = Join-Path $root 'inspect.lnk'
-Copy-Item -LiteralPath $shortcut.FullName -Destination $inspection
-$shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut($inspection)
-Assert ($link.Arguments.Contains('-Inbox "' + $inbox + '"')) 'Shortcut did not retain the custom inbox.'
-Assert ($link.Arguments.Contains('-CollectionRoot "' + $music + '"')) 'Shortcut did not retain the custom collection.'
-Assert (-not $link.Arguments.Contains('-Watch')) 'Shortcut enables watch mode.'
-try {
-    & (Join-Path $root 'Create-Desktop-Shortcut.ps1') -DesktopDirectory $desktop -Inbox $inbox -CollectionRoot $music
-    throw 'Shortcut replacement unexpectedly succeeded.'
-} catch { Assert ($_.Exception.Message -like 'A shortcut already exists:*') 'Unexpected shortcut replacement result.' }
-Write-Output 'PASS: custom paths, Unicode extraction, verification, corrupt/unsafe/duplicate ZIP retention, callback failure, refusal/retry queue, desktop shortcut, and no replacement/watch mode.'
-# CI's PowerShell wrapper otherwise reuses the intentional failed child status.
+$unsafe=Join-Path $inbox 'unsafe.zip'
+$archive=[IO.Compression.ZipFile]::Open($unsafe,[IO.Compression.ZipArchiveMode]::Create)
+try {$entry=$archive.CreateEntry('../escape.wav');$stream=$entry.Open();$stream.WriteByte(1);$stream.Dispose()} finally {$archive.Dispose()}
+Run 1
+Assert (Test-Path -LiteralPath $unsafe) 'Unsafe ZIP deleted.'
+Assert (-not (Test-Path -LiteralPath (Join-Path $root 'escape.wav'))) 'ZIP escaped.'
+Remove-Item -LiteralPath $unsafe
+$tags=[pscustomobject]@{artist='Track Artist';albumArtist='Album Artist';album='Fixture Album'}
+$config.layout='PreserveFolders'
+Assert ((Get-MusicDestination $track 'nested\track.wav' $tags $config) -eq (Join-Path $music 'nested\track.wav')) 'Preserve layout failed.'
+$config.layout='Flat'
+Assert ((Get-MusicDestination $track 'nested\track.wav' $tags $config) -eq (Join-Path $music 'track.wav')) 'Flat layout failed.'
+$config.layout='ArtistAlbum';$config.artistFolder='TrackArtist'
+Assert ((Get-MusicDestination $track 'track.wav' $tags $config) -eq (Join-Path $music 'Track Artist\Fixture Album\track.wav')) 'Track artist failed.'
+$config.musicRoot=Join-Path $root 'Disconnected drive';Write-MusicJson $configPath $config
+$offline=Audio (Join-Path $other 'offline.wav');Run 1
+Assert (Test-Path -LiteralPath $offline) 'Offline storage lost source.'
+$config.musicRoot=$music;Write-MusicJson $configPath $config
+& (Join-Path $package 'Create-Desktop-Shortcut.ps1') -DesktopDirectory $desktop
+$link=@(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk')[0]
+$ascii=Join-Path $desktop 'inspect.lnk';Copy-Item -LiteralPath $link.FullName -Destination $ascii
+$shortcut=(New-Object -ComObject WScript.Shell).CreateShortcut($ascii)
+Assert ($shortcut.Arguments -like '*-NoProfile -ExecutionPolicy Bypass*Music-To-Rekordbox.ps1*') 'Shortcut arguments differ.'
+Assert ($shortcut.Arguments -notlike '*Watch*') 'Watch enabled.'
+Write-Output 'Universal music fixtures passed: ZIP, standalone, tags, collisions, extras, copy/move, retry, layouts, offline storage, shortcut.'
 exit 0

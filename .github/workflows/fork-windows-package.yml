@@ -1,4 +1,4 @@
-name: Package Windows import app
+﻿name: Package Windows import app
 on:
   push:
     branches: [feat/windows-import-command]
@@ -53,6 +53,11 @@ jobs:
           if ($process.ExitCode -ne 1) { throw "Expected failure exit code 1; got $($process.ExitCode)." }
           $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
           if ($result.ok -ne $false -or $result.error -ne 'An import path does not exist. No tracks were imported.') { throw 'Unexpected packaged import report.' }
+      - name: Verify actual app with Windows PowerShell organizer
+        shell: powershell
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'native-music-organizer'
+          & .\scripts\windows-import\Test-Native-Organizer.ps1 -Executable 'target/release/rbxport.exe' -FixtureRoot $fixture
       - uses: actions/upload-artifact@v4
         with:
           name: rbxport-windows-import
