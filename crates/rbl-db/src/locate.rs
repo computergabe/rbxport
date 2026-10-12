@@ -458,8 +458,8 @@ mod tests {
         assert_eq!(switched.master_db, master_db);
 
         let after = std::fs::read_to_string(settings_file(&sources)).unwrap();
-        let default_dir = rbl_core::xml::escape(&sources.default_dir.to_string_lossy());
-        let drive_dir = rbl_core::xml::escape(&drive.to_string_lossy());
+        let default_dir = rbl_core::xml::escape(&setting_path(&sources.default_dir.to_string_lossy(), cfg!(windows)));
+        let drive_dir = rbl_core::xml::escape(&setting_path(&drive.to_string_lossy(), cfg!(windows)));
         assert_eq!(after, before.replace(&default_dir, &drive_dir), "only masterDbDirectory changes");
         assert_eq!(found(locate_with(&sources).unwrap()), master_db);
         assert_eq!(std::fs::read(&master_db).unwrap(), library_before, "the library itself is only read");
@@ -477,7 +477,7 @@ mod tests {
 
         switch_with(&sources, &master_db).unwrap();
         let text = std::fs::read_to_string(settings_file(&sources)).unwrap();
-        assert_eq!(rbl_core::paths::setting_value(&text, MASTER_DB_DIRECTORY).unwrap(), drive.to_string_lossy());
+        assert_eq!(rbl_core::paths::setting_value(&text, MASTER_DB_DIRECTORY).unwrap(), setting_path(&drive.to_string_lossy(), cfg!(windows)));
         assert_eq!(found(locate_with(&sources).unwrap()), master_db);
     }
 
@@ -502,7 +502,7 @@ mod tests {
 
         use_default_with(&sources).unwrap();
         let text = std::fs::read_to_string(settings_file(&sources)).unwrap();
-        assert_eq!(rbl_core::paths::setting_value(&text, MASTER_DB_DIRECTORY).unwrap(), sources.default_dir.to_string_lossy());
+        assert_eq!(rbl_core::paths::setting_value(&text, MASTER_DB_DIRECTORY).unwrap(), setting_path(&sources.default_dir.to_string_lossy(), cfg!(windows)));
         assert!(rbl_core::paths::setting_value(&text, "ColorType").is_some(), "other settings stay");
         assert!(!drive.exists(), "nothing is made on the missing drive");
         assert!(!sources.default_master_db().exists(), "nor in the default folder");

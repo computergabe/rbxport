@@ -96,13 +96,28 @@ fn is_symlink(path: &Path) -> bool {
     if !real.is_absolute() {
         return false;
     }
-    let trim = |p: &Path| p.to_string_lossy().trim_end_matches(['/', '\\']).to_owned();
-    let (real, path) = (trim(&real), trim(path));
+    let (real, path) = (comparable_path(&real), comparable_path(path));
     if cfg!(any(target_os = "macos", windows)) {
         real.to_lowercase() != path.to_lowercase()
     } else {
         real != path
     }
+}
+
+// Windows canonicalize adds a verbatim prefix even for ordinary folders.
+// Compare that spelling with drive/UNC paths without mistaking it for a link.
+fn comparable_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    let text = if cfg!(windows) {
+        if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else {
+            text.strip_prefix(r"\\?\").unwrap_or(&text).replace('/', "\\")
+        }
+    } else {
+        text.into_owned()
+    };
+    text.trim_end_matches(['/', '\\']).to_owned()
 }
 
 /// This machine's Dropbox folder as rekordbox would use it: from
@@ -130,10 +145,11 @@ mod tests {
 
     #[test]
     fn info_json_gives_absolute_personal_and_business_paths() {
-        let text = r#"{"personal": {"path": "/Users/dj/Library/CloudStorage/Dropbox", "host": 1},
-                       "business": {"path": "relative/Team"}}"#;
-        let parsed = DropboxInfo::parse(text);
-        assert_eq!(parsed.personal.as_deref(), Some("/Users/dj/Library/CloudStorage/Dropbox"));
+        let home = tempfile::tempdir().unwrap();
+        let personal = home.path().join("Library/CloudStorage/Dropbox");
+        let text = serde_json::json!({"personal": {"path": personal, "host": 1}, "business": {"path": "relative/Team"}}).to_string();
+        let parsed = DropboxInfo::parse(&text);
+        assert_eq!(parsed.personal.as_deref(), personal.to_str());
         assert_eq!(parsed.business, None, "a relative path is not a folder");
         assert_eq!(DropboxInfo::parse("not json"), DropboxInfo::default());
         assert_eq!(DropboxInfo::parse(r#"{"personal": {}}"#), DropboxInfo::default());
@@ -144,8 +160,9 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         assert_eq!(DropboxInfo::read(home.path()), DropboxInfo::default());
         std::fs::create_dir_all(home.path().join(".dropbox")).unwrap();
-        std::fs::write(info_json(home.path()), r#"{"business": {"path": "/Volumes/Team Dropbox"}}"#).unwrap();
-        assert_eq!(DropboxInfo::read(home.path()).business.as_deref(), Some("/Volumes/Team Dropbox"));
+        let business = home.path().join("Team Dropbox");
+        std::fs::write(info_json(home.path()), serde_json::json!({"business": {"path": business}}).to_string()).unwrap();
+        assert_eq!(DropboxInfo::read(home.path()).business.as_deref(), business.to_str());
     }
 
     #[test]
@@ -158,17 +175,36 @@ mod tests {
 
     #[test]
     fn an_empty_or_missing_setting_falls_back_to_personal_then_business() {
-        let both = info(Some(Path::new("/p/Dropbox")), Some(Path::new("/b/Dropbox (Team)")));
-        let business_only = info(None, Some(Path::new("/b/Dropbox (Team)")));
+        let root = tempfile::tempdir().unwrap();
+        let personal = root.path().join("p/Dropbox");
+        let business = root.path().join("b/Dropbox (Team)");
+        let both = info(Some(&personal), Some(&business));
+        let business_only = info(None, Some(&business));
         // The reporter's likely case: rekordbox never stored a folder.
-        assert_eq!(check_local_public_path("", &both).as_deref(), Some("/p/Dropbox"));
-        assert_eq!(check_local_public_path("", &business_only).as_deref(), Some("/b/Dropbox (Team)"));
+        assert_eq!(check_local_public_path("", &both), Some(s(&personal)));
+        assert_eq!(check_local_public_path("", &business_only), Some(s(&business)));
         // A stale setting is treated like none.
-        let gone = "/definitely/not/a/folder/Dropbox";
-        assert_eq!(check_local_public_path(gone, &both).as_deref(), Some("/p/Dropbox"));
+        let missing = root.path().join("missing/Dropbox");
+        let gone = missing.to_str().unwrap();
+        assert_eq!(check_local_public_path(gone, &both), Some(s(&personal)));
         // No setting and no Dropbox app: no folder.
         assert_eq!(check_local_public_path("", &DropboxInfo::default()), None);
         assert_eq!(check_local_public_path(gone, &DropboxInfo::default()), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ordinary_windows_setting_is_not_a_symlink() {
+        let root = tempfile::tempdir().unwrap();
+        let setting = root.path().join("My Dropbox");
+        std::fs::create_dir(&setting).unwrap();
+        let fallback = root.path().join("Other Dropbox");
+        let other = info(Some(&fallback), Some(&fallback));
+        for spelling in [s(&setting), s(&setting).replace('\\', "/")] {
+            assert!(!is_symlink(Path::new(&spelling)));
+            assert_eq!(check_local_public_path(&spelling, &other), Some(spelling));
+        }
+        assert_eq!(comparable_path(Path::new(r"\\?\UNC\server\share\Dropbox")), r"\\server\share\Dropbox");
     }
 
     #[cfg(unix)]
