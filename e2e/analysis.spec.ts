@@ -5,7 +5,7 @@ test("analysis settings gate the selected batch and can be cancelled", async ({ 
   const rows = page.getByRole("row").filter({ has: page.getByRole("gridcell") });
   await rows.nth(2).click();
   await rows.nth(4).click({ modifiers: ["Shift"] });
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   const dialog = page.getByRole("dialog", { name: "Analysis Setting" });
   await expect(dialog).toContainText("3 tracks selected");
   await expect(page.getByRole("contentinfo")).not.toContainText("Analyzing ");
@@ -20,7 +20,7 @@ test("analysis settings gate the selected batch and can be cancelled", async ({ 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("contentinfo")).not.toContainText("Analyzing ");
 
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
@@ -31,7 +31,7 @@ test("analysis settings submit a key-only batch", async ({ page }) => {
   const rows = page.getByRole("row").filter({ has: page.getByRole("gridcell") });
   await rows.nth(2).click();
   await rows.nth(9).click({ modifiers: ["Shift"] });
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   const dialog = page.getByRole("dialog", { name: "Analysis Setting" });
   await dialog.getByRole("checkbox", { name: "BPM / Grid", exact: true }).uncheck();
   await dialog.getByRole("button", { name: "OK", exact: true }).click();
@@ -46,7 +46,7 @@ test("the first-beat memory cue follows Preferences and can be changed per batch
   await rows.nth(2).click();
   const dialog = page.getByRole("dialog", { name: "Analysis Setting" });
   const cue = dialog.getByRole("checkbox", { name: "Add memory cue at first beat" });
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await expect(cue).not.toBeChecked();
   await dialog.getByRole("checkbox", { name: "BPM / Grid", exact: true }).uncheck();
   await expect(cue).toBeDisabled();
@@ -63,12 +63,12 @@ test("the first-beat memory cue follows Preferences and can be changed per batch
   await expect(preferences).toHaveCount(0);
 
   await rows.nth(3).click();
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await expect(cue).toBeChecked();
   await cue.uncheck();
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   // A per-batch choice does not change the preference.
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await expect(cue).toBeChecked();
 });
 

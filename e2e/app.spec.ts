@@ -1497,7 +1497,7 @@ test("analysing a selection reports progress and can be stopped", async ({ page 
   const rows = page.getByRole("row").filter({ has: page.getByRole("gridcell") });
   await rows.nth(2).click();
   await rows.nth(9).click({ modifiers: ["Shift"] });
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await page.getByRole("dialog", { name: "Analysis Setting" }).getByRole("button", { name: "OK", exact: true }).click();
 
   const status = page.getByRole("contentinfo");
@@ -1516,7 +1516,7 @@ test("a track that cannot be analysed does not stop the run", async ({ page }) =
   const rows = page.getByRole("row").filter({ has: page.getByRole("gridcell") });
   await rows.nth(0).click();
   await rows.nth(14).click({ modifiers: ["Shift"] });
-  await page.keyboard.press("Shift+Meta+A");
+  await page.keyboard.press("Shift+ControlOrMeta+A");
   await page.getByRole("dialog", { name: "Analysis Setting" }).getByRole("button", { name: "OK", exact: true }).click();
 
   const status = page.getByRole("contentinfo");

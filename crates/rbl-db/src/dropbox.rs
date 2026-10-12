@@ -96,28 +96,25 @@ fn is_symlink(path: &Path) -> bool {
     if !real.is_absolute() {
         return false;
     }
-    let (real, path) = (comparable_path(&real), comparable_path(path));
-    if cfg!(any(target_os = "macos", windows)) {
-        real.to_lowercase() != path.to_lowercase()
-    } else {
-        real != path
+    #[cfg(windows)]
+    {
+        // Canonical Windows paths can expand short names and add a verbatim
+        // prefix. Those spelling changes are not links. Inspect the path and
+        // its parents instead; FileType detects symlinks and junctions.
+        path.ancestors().any(|part| {
+            std::fs::symlink_metadata(part).is_ok_and(|metadata| metadata.file_type().is_symlink())
+        })
     }
-}
-
-// Windows canonicalize adds a verbatim prefix even for ordinary folders.
-// Compare that spelling with drive/UNC paths without mistaking it for a link.
-fn comparable_path(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    let text = if cfg!(windows) {
-        if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
-            format!(r"\\{unc}")
+    #[cfg(not(windows))]
+    {
+        let trim = |p: &Path| p.to_string_lossy().trim_end_matches(['/', '\\']).to_owned();
+        let (real, path) = (trim(&real), trim(path));
+        if cfg!(target_os = "macos") {
+            real.to_lowercase() != path.to_lowercase()
         } else {
-            text.strip_prefix(r"\\?\").unwrap_or(&text).replace('/', "\\")
+            real != path
         }
-    } else {
-        text.into_owned()
-    };
-    text.trim_end_matches(['/', '\\']).to_owned()
+    }
 }
 
 /// This machine's Dropbox folder as rekordbox would use it: from
@@ -204,7 +201,26 @@ mod tests {
             assert!(!is_symlink(Path::new(&spelling)));
             assert_eq!(check_local_public_path(&spelling, &other), Some(spelling));
         }
-        assert_eq!(comparable_path(Path::new(r"\\?\UNC\server\share\Dropbox")), r"\\server\share\Dropbox");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_junction_and_its_children_use_the_business_fallback() {
+        let root = tempfile::tempdir().unwrap();
+        let real = root.path().join("Real Dropbox");
+        let link = root.path().join("Linked Dropbox");
+        let business = root.path().join("Business Dropbox");
+        std::fs::create_dir(&real).unwrap();
+        std::fs::create_dir(real.join("rekordbox")).unwrap();
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"]).arg(&link).arg(&real).output().unwrap();
+        assert!(status.status.success(), "{}", String::from_utf8_lossy(&status.stderr));
+        assert!(!is_symlink(&real));
+        assert!(is_symlink(&link));
+        assert!(is_symlink(&link.join("rekordbox")));
+        assert_eq!(check_local_public_path(&s(&link), &info(Some(&real), Some(&business))), Some(s(&business)));
+        assert_eq!(check_local_public_path(&s(&link), &info(Some(&real), None)), Some(s(&real)));
+        assert_eq!(check_local_public_path(&s(&link), &DropboxInfo::default()), None);
     }
 
     #[cfg(unix)]
