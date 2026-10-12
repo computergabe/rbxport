@@ -7,8 +7,12 @@ background watcher.
 ## Download and first setup
 
 Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.0).
-The unsigned package needs Windows x64, Windows PowerShell 5.1, and WebView2.
-Build tools are only needed to compile from source.
+The unsigned package needs Windows x64, Windows PowerShell 5.1, WebView2, and
+the current [Microsoft Visual C++ x64 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe).
+These runtimes may already be installed. If Windows reports a missing
+`MSVCP140.dll` or `VCRUNTIME140.dll`, install that Microsoft runtime and retry.
+[Microsoft's runtime documentation](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+explains the requirement. Build tools are only needed to compile from source.
 
 1. Extract the complete package to a permanent writable folder, for example
    `C:\Users\YourName\Apps\RBXPORT-Music`. Keep its files together.
