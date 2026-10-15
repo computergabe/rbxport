@@ -618,6 +618,7 @@ fn shared_udp(port: u16, pin: Option<(&str, Ipv4Addr)>) -> io::Result<UdpSocket>
         _ => Ipv4Addr::UNSPECIFIED,
     };
     socket.bind(&SocketAddr::V4(SocketAddrV4::new(bind_to, port)).into())?;
+    #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
     if let Some((name, _)) = pin {
         pin_to_interface(&socket, name)?;
     }
@@ -647,12 +648,6 @@ fn pin_to_interface(socket: &socket2::Socket, name: &str) -> io::Result<()> {
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn pin_to_interface(socket: &socket2::Socket, name: &str) -> io::Result<()> {
     socket.bind_device(Some(name.as_bytes()))
-}
-
-/// Bound to the interface's address instead, above.
-#[cfg(not(any(target_vendor = "apple", target_os = "linux", target_os = "android")))]
-fn pin_to_interface(_socket: &socket2::Socket, _name: &str) -> io::Result<()> {
-    Ok(())
 }
 
 fn now_ms(since: Instant) -> u64 {

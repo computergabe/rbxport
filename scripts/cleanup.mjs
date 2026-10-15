@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Removes regenerable checkout output via pnpm clean.
  * Use pnpm clean -- --dry-run to preview. --app-data additionally removes caches

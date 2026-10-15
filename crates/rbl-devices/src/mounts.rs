@@ -86,11 +86,8 @@ impl Drop for MountWatcher {
 #[must_use]
 pub fn mounts() -> Vec<PathBuf> {
     if let Some(fake) = std::env::var_os(crate::FAKE_VOLUMES) {
-        let mut fakes: Vec<PathBuf> = fake
-            .to_string_lossy()
-            .split(':')
-            .filter(|path| !path.is_empty())
-            .map(PathBuf::from)
+        let mut fakes: Vec<PathBuf> = std::env::split_paths(&fake)
+            .filter(|path| !path.as_os_str().is_empty())
             .collect();
         fakes.sort();
         return fakes;

@@ -1,0 +1,19 @@
+﻿name: Check Windows PowerShell package
+on:
+  # Releases are tested and built locally. Hosted checks are an explicit opt-in.
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package-fixtures:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      RBXPORT_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PowerShell 5 package with disposable files and mock importer
+        shell: powershell
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'music-package-fixture'
+          & .\scripts\windows-import\Test-Package.ps1 -FixtureRoot $fixture

@@ -381,12 +381,13 @@ mod tests {
 
     #[test]
     fn candidate_paths_cover_music_app_and_itunes() {
-        let paths = candidate_library_paths(Path::new("/Users/me/Music"));
+        let music = if cfg!(windows) { Path::new("C:/Users/me/Music") } else { Path::new("/Users/me/Music") };
+        let paths = candidate_library_paths(music);
         assert_eq!(
-            paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+            paths,
             vec![
-                "/Users/me/Music/Music/Library.xml".to_owned(),
-                "/Users/me/Music/iTunes/iTunes Music Library.xml".to_owned(),
+                music.join("Music/Library.xml"),
+                music.join("iTunes/iTunes Music Library.xml"),
             ]
         );
     }

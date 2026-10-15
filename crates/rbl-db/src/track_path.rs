@@ -226,6 +226,8 @@ mod tests {
     use super::*;
 
     const OWN: &str = "own-device";
+    const DROPBOX_ROOT: &str = if cfg!(windows) { "C:/Users/dj/Dropbox" } else { "/Users/dj/Dropbox" };
+    const OTHER_ROOT: &str = if cfg!(windows) { "D:/Dropbox" } else { "/D" };
 
     fn shared(folder: &str, org: &str, service: i64, device: &str) -> StoredPath {
         StoredPath {
@@ -250,13 +252,13 @@ mod tests {
             SERVICE_DROPBOX,
             OWN,
         );
-        assert_eq!(paths(Some("/Users/dj/Dropbox")).resolve(&row), row.org_folder_path);
+        assert_eq!(paths(Some(DROPBOX_ROOT)).resolve(&row), row.org_folder_path);
     }
 
     #[test]
     fn another_devices_cloud_track_reads_the_dropbox_copy() {
         let row = shared("/contents_1/a/b.mp3", "/Volumes/Other Mac/b.mp3", SERVICE_DROPBOX, "other-device");
-        assert_eq!(paths(Some("/Users/dj/Dropbox")).resolve(&row), "/Users/dj/Dropbox/rekordbox/contents_1/a/b.mp3");
+        assert_eq!(PathBuf::from(paths(Some(DROPBOX_ROOT)).resolve(&row)), PathBuf::from(DROPBOX_ROOT).join("rekordbox/contents_1/a/b.mp3"));
     }
 
     #[test]
@@ -273,16 +275,17 @@ mod tests {
 
     #[test]
     fn a_shared_desktop_app_track_keeps_the_cloud_path() {
-        let dropbox = paths(Some("/Users/dj/Dropbox"));
+        let dropbox = paths(Some(DROPBOX_ROOT));
         // OrgFolderPath inside the Dropbox folder.
-        let row = shared("/contents_1/a.mp3", "/users/DJ/dropbox/Music/a.mp3", SERVICE_DROPBOX, OWN);
-        assert_eq!(dropbox.resolve(&row), "/Users/dj/Dropbox/rekordbox/contents_1/a.mp3");
+        let inside = if cfg!(windows) { "c:/users/DJ/dropbox/Music/a.mp3" } else { "/users/DJ/dropbox/Music/a.mp3" };
+        let row = shared("/contents_1/a.mp3", inside, SERVICE_DROPBOX, OWN);
+        assert_eq!(PathBuf::from(dropbox.resolve(&row)), PathBuf::from(DROPBOX_ROOT).join("rekordbox/contents_1/a.mp3"));
         // FolderPath not a cloud path at all.
         let row = shared("/Volumes/M/a.mp3", "/Volumes/N/a.mp3", SERVICE_DROPBOX, OWN);
         assert_eq!(dropbox.resolve(&row), "/Volumes/M/a.mp3");
         // OrgFolderPath ending with the cloud path, ignoring case.
         let row = shared("/contents_1/a.mp3", "/Volumes/N/CONTENTS_1/A.MP3", SERVICE_DROPBOX, OWN);
-        assert_eq!(dropbox.resolve(&row), "/Users/dj/Dropbox/rekordbox/contents_1/a.mp3");
+        assert_eq!(PathBuf::from(dropbox.resolve(&row)), PathBuf::from(DROPBOX_ROOT).join("rekordbox/contents_1/a.mp3"));
         // With no Dropbox folder at all (no usable DropboxSharingPath and
         // no Dropbox app record, `crate::dropbox`) rekordbox's share path
         // is empty, which every path starts with. With the setting empty
@@ -294,14 +297,14 @@ mod tests {
     #[test]
     fn the_location_column_shows_the_local_copy_or_the_stored_path() {
         let drive = DriveMapping::new("/Volumes/Music/", "/Volumes/Music 1/");
-        let resolver = TrackPaths::new(drive, Some("/D".into()), Some(OWN.into()));
+        let resolver = TrackPaths::new(drive, Some(OTHER_ROOT.into()), Some(OWN.into()));
         let own = shared("/contents_1/a.mp3", "/Volumes/Music/a.mp3", SERVICE_DROPBOX, OWN);
         assert_eq!(resolver.location(&own), "/Volumes/Music/a.mp3");
         // Another device's track: the stored cloud path, not the Dropbox
         // copy that is opened.
         let other = shared("/contents_1/a.mp3", "/Volumes/X/a.mp3", SERVICE_DROPBOX, "other");
         assert_eq!(resolver.location(&other), "/contents_1/a.mp3");
-        assert_eq!(resolver.resolve(&other), "/D/rekordbox/contents_1/a.mp3");
+        assert_eq!(PathBuf::from(resolver.resolve(&other)), PathBuf::from(OTHER_ROOT).join("rekordbox/contents_1/a.mp3"));
         let plain = StoredPath { folder_path: "/Volumes/Music/b.mp3".into(), ..StoredPath::default() };
         assert_eq!(resolver.location(&plain), "/Volumes/Music 1/b.mp3");
     }
@@ -315,7 +318,7 @@ mod tests {
     #[test]
     fn an_empty_local_copy_falls_back_to_the_cloud_path() {
         let row = shared("/contents_1/a.mp3", "", SERVICE_DROPBOX, OWN);
-        assert_eq!(paths(Some("/D")).resolve(&row), "/D/rekordbox/contents_1/a.mp3");
+        assert_eq!(PathBuf::from(paths(Some(OTHER_ROOT)).resolve(&row)), PathBuf::from(OTHER_ROOT).join("rekordbox/contents_1/a.mp3"));
     }
 
     #[test]

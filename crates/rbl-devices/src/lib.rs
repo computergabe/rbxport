@@ -23,7 +23,7 @@ pub use mounts::MountWatcher;
 
 use std::path::{Path, PathBuf};
 
-/// Set to a `:`-separated list of directories to use those instead of the real
+/// Set to a platform path-list (`;` on Windows, `:` elsewhere) to use directories instead of real
 /// volumes. Tests and `pnpm dev` use it; nothing else should.
 pub const FAKE_VOLUMES: &str = "RB_LITE_FAKE_VOLUMES";
 
@@ -67,11 +67,9 @@ pub struct DeviceExport {
 #[must_use]
 pub fn list() -> Vec<Device> {
     if let Some(fake) = std::env::var_os(FAKE_VOLUMES) {
-        return fake
-            .to_string_lossy()
-            .split(':')
-            .filter(|path| !path.is_empty())
-            .map(|path| fake_device(Path::new(path)))
+        return std::env::split_paths(&fake)
+            .filter(|path| !path.as_os_str().is_empty())
+            .map(|path| fake_device(&path))
             .collect();
     }
 
@@ -364,6 +362,14 @@ mod tests {
         assert_eq!(devices.len(), 1);
         assert_eq!(devices[0].name, "DJ STICK");
         assert_eq!(devices[0].mount_point, stick);
+        let other = dir.path().join("SECOND STICK");
+        std::fs::create_dir(&other).unwrap();
+        std::env::set_var(FAKE_VOLUMES, std::env::join_paths([&stick, &other]).unwrap());
+        let devices = list();
+        let mounts = crate::mounts::mounts();
+        std::env::remove_var(FAKE_VOLUMES);
+        assert_eq!(devices.iter().map(|d| &d.mount_point).collect::<Vec<_>>(), vec![&stick, &other]);
+        assert_eq!(mounts, vec![stick, other]);
     }
 
     #[test]
