@@ -1,4 +1,4 @@
-﻿MUSIC TO REKORDBOX - WINDOWS RELEASE
+MUSIC TO REKORDBOX - WINDOWS RELEASE
 
 Needs Windows x64, Windows PowerShell 5.1, WebView2, and Microsoft's current
 Visual C++ x64 runtime. If MSVCP140.dll or VCRUNTIME140.dll is missing, install:
@@ -6,8 +6,7 @@ https://aka.ms/vc14/vc_redist.x64.exe
 
 1. Keep this extracted package in a permanent writable folder.
 2. Open RBXPORT-Music\rbxport.exe once.
-   In Preferences, disable Library Protection when you want imports,
-   and disable automatic update checking to keep this custom build.
+   In Preferences, disable Library Protection when you want imports.
    Close RBXPORT.
 3. Open PowerShell in this folder and run:
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
@@ -24,3 +23,6 @@ Read POWERSHELL-GUIDE.md for setup, formats, verification, errors, and recovery.
 This unsigned independent release is not an official upstream release.
 Source: https://github.com/computergabe/rbxport
 License: GPL-2.0-or-later. License text and build information are included.
+
+Version 1.2.1 blocks in-app updates. Updates and bug reports open this fork on GitHub.
+For upgrades, close RBXPORT and replace package files; keep your configuration and queue.

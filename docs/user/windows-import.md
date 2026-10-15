@@ -1,4 +1,4 @@
-﻿# Music to Rekordbox: Windows setup and PowerShell automation
+# Music to Rekordbox: Windows setup and PowerShell automation
 
 This independent community fork organizes downloaded music and registers it
 in the active rekordbox library. It runs once per desktop click. There is no
@@ -10,19 +10,27 @@ The source now disables in-app updates at the native command boundary, including
 manual checks, downloads, installation on exit, and the elevated update helper.
 Its update feed is empty, and old saved preferences cannot enable automatic
 checks. Use this fork's [release page](https://github.com/computergabe/rbxport/releases)
-for manual upgrades. The About pane provides an **Open custom releases** button.
+for manual upgrades. The About pane and Help menu open the fork release page in your browser.
 
 The original `windows-music-1.2.0` download predates this protection: its upstream
 updater must remain disabled. An already downloaded update may still install
-on exit. This source change does not retroactively modify that published ZIP.
+on exit. Upgrade to 1.2.1; the older ZIP remains unchanged for release history.
 
-Other inherited About/support links and the bug-report form still belong to the
-upstream project; they are not update channels. Reports about this fork should
-go to [this fork's issues](https://github.com/computergabe/rbxport/issues).
+Bug reporting opens a new GitHub issue in this fork, with no automatic log upload or upstream reporting-service request. Release notes, update checks, and the GitHub button also point to this fork. Original author credits and social/donation links remain attributed to the original developer.
+
+## Upgrade from 1.2.0
+
+Close RBXPORT before replacing its files. If an upstream version was installed by
+an earlier update, uninstall that separate app using Windows Installed Apps;
+its uninstaller removes its silent-update task. Keep your music and settings.
+Extract the 1.2.1 package over your existing portable package folder. It contains
+no personal configuration, queue, or logs, so retain those existing files.
+Your shortcut continues to work when the package stays in the same folder.
+Do not run setup again unless you want to change your folders or import settings.
 
 ## Download and first setup
 
-Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.0).
+Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.1).
 The unsigned package needs Windows x64, Windows PowerShell 5.1, WebView2, and
 the current [Microsoft Visual C++ x64 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe).
 These runtimes may already be installed. If Windows reports a missing
@@ -33,8 +41,7 @@ explains the requirement. Build tools are only needed to compile from source.
 1. Extract the complete package to a permanent writable folder, for example
    `C:\Users\YourName\Apps\RBXPORT-Music`. Keep its files together.
 2. Open `RBXPORT-Music\rbxport.exe` once. In Preferences, disable Library
-   Protection when you want to permit imports, and disable automatic update
-   checking to retain this custom build. Close RBXPORT afterward.
+   Protection when you want to permit imports. In-app update installation is disabled in this version. Close RBXPORT afterward.
 3. Open PowerShell in the extracted folder and run:
 
    ```powershell

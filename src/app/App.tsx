@@ -1,3 +1,4 @@
+import { FORK_RELEASES } from "@/lib/forkLinks";
 import { useBackupProgress } from "@/store/useBackupProgress";
 import { useExportProgress } from "@/store/useExportProgress";
 import { reportStartupPaint } from "@/lib/startup";
@@ -477,13 +478,8 @@ function AppBody() {
   // Checks on its own a while after launch when Preferences says so; the
   // menu and Preferences ask by hand.
   const updater = useUpdater(false, advancedPrefs.updateFrequency);
-  const checkForUpdates = updater.check;
-  const openWhatsNew = useCallback(() => {
-    const release = updater.state.phase === "ready" ? `#v${updater.state.ready.version}` : "";
-    void getBackend()
-      .then((backend) => backend.openUrl(`https://rbxport.com/whats-new/${release}`))
-      .catch(() => {});
-  }, [updater.state]);
+  const checkForUpdates = useCallback(() => { void getBackend().then(backend => backend.openUrl(FORK_RELEASES)).catch(() => {}); }, []);
+  const openWhatsNew = useCallback(() => { void getBackend().then(backend => backend.openUrl(FORK_RELEASES)).catch(() => {}); }, []);
   const [updateNoticeVisible, setUpdateNoticeVisible] = useState(false);
   useEffect(() => {
     setUpdateNoticeVisible(updater.state.phase === "ready");
@@ -1954,7 +1950,7 @@ function AppBody() {
       return;
     }
     if (outcome.action === "updates") {
-      checkForUpdates(true);
+      checkForUpdates();
       return;
     }
     if (outcome.action.startsWith("layout-")) {
