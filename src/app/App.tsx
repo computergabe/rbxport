@@ -476,7 +476,7 @@ function AppBody() {
   }, []);
   // Checks on its own a while after launch when Preferences says so; the
   // menu and Preferences ask by hand.
-  const updater = useUpdater(advancedPrefs.checkUpdates, advancedPrefs.updateFrequency);
+  const updater = useUpdater(false, advancedPrefs.updateFrequency);
   const checkForUpdates = updater.check;
   const openWhatsNew = useCallback(() => {
     const release = updater.state.phase === "ready" ? `#v${updater.state.ready.version}` : "";

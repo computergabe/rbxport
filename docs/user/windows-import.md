@@ -4,6 +4,22 @@ This independent community fork organizes downloaded music and registers it
 in the active rekordbox library. It runs once per desktop click. There is no
 background watcher.
 
+## Update safety
+
+The source now disables in-app updates at the native command boundary, including
+manual checks, downloads, installation on exit, and the elevated update helper.
+Its update feed is empty, and old saved preferences cannot enable automatic
+checks. Use this fork's [release page](https://github.com/computergabe/rbxport/releases)
+for manual upgrades. The About pane provides an **Open custom releases** button.
+
+The original `windows-music-1.2.0` download predates this protection: its upstream
+updater must remain disabled. An already downloaded update may still install
+on exit. This source change does not retroactively modify that published ZIP.
+
+Other inherited About/support links and the bug-report form still belong to the
+upstream project; they are not update channels. Reports about this fork should
+go to [this fork's issues](https://github.com/computergabe/rbxport/issues).
+
 ## Download and first setup
 
 Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.0).

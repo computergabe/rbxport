@@ -56,7 +56,7 @@ const SUPPORT_URL = "https://www.paypal.com/donate/?hosted_button_id=H6GGU8PHP8C
 export function AboutPane() {
   const t = useTranslation();
   const { preferences, update } = usePreferencesContext();
-  const { checkUpdates, updateFrequency } = preferences.advanced;
+  const { updateFrequency } = preferences.advanced;
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ kind: "idle" });
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
@@ -172,12 +172,13 @@ export function AboutPane() {
           <div className={styles.updateControls}>
             <Toggle
               label="Download updates"
-              checked={checkUpdates}
+              checked={false}
+              disabled
               onChange={(checkUpdates) => update("advanced", { checkUpdates })}
             />
             <Select
               label="Update frequency"
-              disabled={!checkUpdates}
+              disabled
               value={updateFrequency}
               choices={[
                 { value: "start", label: "After startup" },
@@ -187,7 +188,8 @@ export function AboutPane() {
               onChange={(updateFrequency) => update("advanced", { updateFrequency })}
             />
           </div>
-          <p className={layout.help}>Updates download in the background and install after you quit.</p>
+          <p className={layout.help}>In-app updates are disabled for this custom version. Get updates from computergabe/rbxport on GitHub.</p>
+          <Button onClick={() => open("https://github.com/computergabe/rbxport/releases")}>Open custom releases</Button>
           {statusText ? <p className={styles.updateHint} aria-live="polite">{statusText}</p> : null}
           {downloading ? (
             <div className={styles.updateProgressRow}>

@@ -101,23 +101,24 @@ describe("AboutPane › Updates", () => {
     expect(openUrl).toHaveBeenCalledWith("https://www.paypal.com/donate/?hosted_button_id=H6GGU8PHP8CJE");
   });
 
-  it("the switch shows the preference and writes its opposite", async () => {
+  it("blocks automatic updates even when a stored preference enables them", async () => {
     mount();
     await settle();
     const toggle = section().querySelector<HTMLInputElement>('input[role="switch"]');
-    expect(toggle?.checked).toBe(true);
+    expect(toggle?.checked).toBe(false);
+    expect(toggle?.disabled).toBe(true);
     act(() => toggle?.click());
-    expect(update).toHaveBeenCalledWith("advanced", { checkUpdates: false });
-    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
   });
 
-  it("the switch reads a stored no as off and writes yes back", async () => {
+  it("cannot re-enable automatic updates through preferences", async () => {
     mount({ ...DEFAULT_PREFERENCES, advanced: { ...DEFAULT_PREFERENCES.advanced, checkUpdates: false } });
     await settle();
     const toggle = section().querySelector<HTMLInputElement>('input[role="switch"]');
     expect(toggle?.checked).toBe(false);
     act(() => toggle?.click());
-    expect(update).toHaveBeenCalledWith("advanced", { checkUpdates: true });
+    expect(toggle?.disabled).toBe(true);
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("the button checks here and reports an update found", async () => {
