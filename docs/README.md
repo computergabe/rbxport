@@ -1,4 +1,4 @@
-# Documentation
+﻿# Documentation
 
 New developers should follow the [developer reading path](../README.md#developer-reading-path).
 Commands in these guides run from the repository root unless stated otherwise.
@@ -17,6 +17,8 @@ Commands in these guides run from the repository root unless stated otherwise.
 | [Sentry](development/sentry.md) | Configuring crash reporting for a build. |
 
 ## Using the app
+
+- [Windows PowerShell import](user/windows-import.md): customizable music inboxes, the Music to Rekordbox button, tags and storage layouts, native commands, recovery, local builds, and packaging.
 
 - [Track analysis settings](user/analysis-settings.md): choosing stages and queuing a batch.
 - [USB export](user/usb-export.md): compatibility conversion and playlist cleanup.

@@ -1,0 +1,63 @@
+﻿name: Package Windows import app
+on:
+  # Releases are tested and built locally. Hosted builds are an explicit opt-in.
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      RBXPORT_TEST: '1'
+      CARGO_TARGET_DIR: target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-native-target
+          workspaces: '. -> target'
+          cache-on-failure: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Configure vendored OpenSSL
+        shell: pwsh
+        run: |
+          'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
+          'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
+      - name: Build packaged Windows app
+        shell: pwsh
+        run: |
+          # Tauri invokes Cargo from src-tauri. Keep output at the cached root.
+          $env:CARGO_TARGET_DIR = Join-Path $env:GITHUB_WORKSPACE 'target'
+          pnpm tauri build --no-bundle --ci
+      - name: Verify packaged import failure
+        shell: pwsh
+        run: |
+          # A missing options file isolates this check from installed libraries.
+          $env:RBXPORT_OPTIONS = Join-Path $env:GITHUB_WORKSPACE 'absent-test.options.json'
+          $missing = Join-Path $env:GITHUB_WORKSPACE 'absent-test-album'
+          $report = Join-Path $env:GITHUB_WORKSPACE 'native-import-failure.json'
+          if ((Test-Path -LiteralPath $env:RBXPORT_OPTIONS) -or (Test-Path -LiteralPath $missing) -or (Test-Path -LiteralPath $report)) { throw 'Test isolation paths already exist.' }
+          $arguments = '--import "' + $missing + '" --import-report "' + $report + '"'
+          $process = Start-Process -FilePath 'target/release/rbxport.exe' -ArgumentList $arguments -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(30000)) { throw 'Packaged import failed to exit.' }
+          if ($process.ExitCode -ne 1) { throw "Expected failure exit code 1; got $($process.ExitCode)." }
+          $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($result.ok -ne $false -or $result.error -ne 'An import path does not exist. No tracks were imported.') { throw 'Unexpected packaged import report.' }
+      - name: Verify actual app with Windows PowerShell organizer
+        shell: powershell
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'native-music-organizer'
+          & .\scripts\windows-import\Test-Native-Organizer.ps1 -Executable 'target/release/rbxport.exe' -FixtureRoot $fixture
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rbxport-windows-import
+          path: target/release/rbxport.exe
+          if-no-files-found: error

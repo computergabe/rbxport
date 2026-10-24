@@ -9,6 +9,8 @@ mod windowfit;
 mod file_drop;
 mod file_drag;
 mod startup;
+mod import_cli;
+mod music_inspect;
 mod screen_cache;
 mod sentry;
 pub mod analysis;
@@ -55,6 +57,11 @@ pub use error::{AppError, AppResult, ErrorKind};
 /// Runs the protected Windows update entry point before Tauri starts.
 pub fn run_elevated_update_helper_if_requested() -> Option<i32> {
     update::run_elevated_helper_if_requested()
+}
+
+/// Reads audio metadata for inbox scripts without opening a rekordbox library.
+pub fn run_music_inspect_if_requested() -> Option<i32> {
+    music_inspect::run_if_requested()
 }
 
 use state::AppState;
@@ -416,6 +423,7 @@ pub fn run() {
             // AppleScript: the bridge to the window, and on macOS the
             // scriptable classes, before any Apple Event can arrive.
             crate::scripting::install(app.handle());
+            crate::import_cli::start(app.handle()).map_err(std::io::Error::other)?;
             spawn_library_load(app.handle().clone());
             // Join the network on start: a passive watcher that hears every
             // player and mixer and reports them, so the shell can offer LINK
@@ -668,14 +676,26 @@ pub fn run() {
     match result {
         Ok(app) => {
             crate::update::Updates::clear_stale(app.handle());
-            app.run(|handle, event| {
+            let import_exit = std::rc::Rc::new(std::cell::Cell::new(1));
+            let requested_exit = std::rc::Rc::clone(&import_exit);
+            let on_run_event = move |handle: &tauri::AppHandle, event: tauri::RunEvent| {
+                if let tauri::RunEvent::ExitRequested { code: Some(code), .. } = &event {
+                    requested_exit.set(*code);
+                }
                 // An update downloaded this run and waiting for the quit
                 // (Windows) is installed now, silently.
                 if matches!(event, tauri::RunEvent::Exit) {
                     crate::screen_cache::save(handle);
                     crate::update::on_exit(handle);
                 }
-            });
+            };
+            if crate::import_cli::requested() {
+                // Wry maps RequestExit to ControlFlow::Exit (zero) on Windows.
+                // Retain the requested status and exit after Tauri's cleanup.
+                app.run_return(on_run_event);
+                std::process::exit(import_exit.get());
+            }
+            app.run(on_run_event);
         }
         Err(e) => {
             tracing::error!(error = %e, "fatal: could not start the application");

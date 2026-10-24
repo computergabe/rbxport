@@ -1,0 +1,57 @@
+name: Fork Windows import build
+on:
+  # Releases are tested and built locally. Hosted checks are an explicit opt-in.
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      RBXPORT_TEST: '1'
+      CARGO_TARGET_DIR: target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-native-target
+          workspaces: '. -> target'
+          cache-on-failure: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Configure vendored OpenSSL
+        shell: pwsh
+        run: |
+          'OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe' | Out-File $env:GITHUB_ENV -Append
+          'C:\Strawberry\perl\bin' | Out-File $env:GITHUB_PATH -Append
+      - run: cargo test -p rbl-db --lib
+      - run: cargo test -p rbxport --lib import_cli
+      - run: cargo test -p rbxport --lib music_inspect
+      - name: Diagnose native test startup
+        if: failure()
+        shell: pwsh
+        run: |
+          $vs = & 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1
+          $test = Get-ChildItem 'target\debug\deps\rbxport_lib-*.exe' | Select-Object -First 1
+          & $dumpbin.FullName /imports $test.FullName | Out-File native-imports.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: native-test-diagnostics
+          path: |
+            native-imports.txt
+            target/debug/deps/rbxport_lib-*.exe
+      - run: cargo test -p rbxport --test commands import
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Run every test target so a failed crate does not hide later failures.
+      - run: cargo test --workspace --no-fail-fast

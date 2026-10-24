@@ -1,10 +1,93 @@
 <p align="center">
-  <a href="https://rbxport.com">
+  <a href="https://github.com/computergabe/rbxport">
     <img src="docs/assets/brand/combined/rbxport-logo-color-white.png" alt="rbxport" width="360">
   </a>
 </p>
 
-# rbxport
+# rbxport — Music to Rekordbox for Windows
+
+This public community fork of [chrisle/rbxport](https://github.com/chrisle/rbxport)
+adds **on-demand music automation**. Choose your inbox folders and permanent
+music folder, organize ZIPs and individual audio files, and register their
+tracks in the active rekordbox library with a desktop button.
+This is an independent Windows release, not an official upstream release.
+
+Version **1.2.1** prevents upstream updates from replacing this fork. Update checks
+and release notes open this fork's releases in your browser; upgrades are manual.
+Bug reports open [this fork's GitHub issues](https://github.com/computergabe/rbxport/issues).
+See the [upgrade instructions](docs/user/windows-import.md#upgrade-from-120) if you
+already use 1.2.0. Your music, settings, and pending import queue can stay in place.
+
+## Download and set up
+
+[Download the Windows x64 music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.1)
+or [read the setup and PowerShell guide](docs/user/windows-import.md).
+
+1. Extract the package to a permanent writable folder.
+2. Open the included RBXPORT app once. Disable Library Protection when you
+   intend to allow imports. In-app updates are blocked in 1.2.1; close the app.
+3. Open PowerShell in the extracted folder and run:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
+   ```
+
+4. Choose your source folders or individual files, **WHERE SONGS LIVE** storage
+   folder, layout, Copy or Move policy, and library-import preference.
+5. Close rekordbox and its tray agent, then click **Music → Rekordbox**.
+   Reopen rekordbox after it finishes.
+
+The setup creates the button and saves your preferences for later clicks.
+Downloads need no compiler tools. The release includes scripts, the app, an
+icon, licenses, checksums, and corresponding source.
+
+## Use your own music system
+
+Select multiple inboxes, include subfolders if desired, and choose music
+storage on an available local/external drive or accessible network share.
+The storage folder can have any name; “WHERE SONGS LIVE” is the setup label.
+
+- **Artist/Album/Filename:** reads embedded tags; prefers Album Artist with
+  Track Artist fallback. Missing tags use Unknown Artist/Unknown Album.
+- **Preserve folders:** keeps ZIP structure and loose files' relative paths.
+- **Flat:** puts audio directly in the chosen storage folder.
+
+Copy keeps original downloads and is the default. Move removes originals
+only after verified storage and a durable retry queue. ZIP extras such as
+artwork are preserved separately. Different files with the same destination
+name receive a content-hash suffix; existing audio is not overwritten.
+Recognized formats and file-handling details are in the guide.
+
+The button runs once per click. It verifies extraction and SHA-256 copies,
+then imports queued audio paths. Failed imports stay queued, and retries skip
+paths already in the library. It honors Library Protection.
+
+Music storage and the rekordbox database may be on different drives. The app
+uses rekordbox's configured library location; choose the intended library in
+rekordbox before closing it. **No rekordbox.xml is needed for this workflow.**
+This is for new downloads; it does not relocate tracks already in a collection.
+Existing working launchers and music are not automatically migrated.
+
+## PowerShell and building from source
+
+The app supports repeated `--import <path>` arguments with
+`--import-report <new.json>`, and read-only audio metadata inspection with
+`--inspect-list <paths.json> --inspect-report <new.json>`.
+
+See the [PowerShell guide](docs/user/windows-import.md) for examples, reports,
+recovery, Windows prerequisites, Tauri builds, and packaging instructions.
+Use this fork's default branch or the `windows-music-1.2.1` release tag.
+
+The full Windows workspace suite and Clippy checks pass locally, along with
+frontend lint, unit, build, bundle-budget, Chromium UI, and disposable
+PowerShell file-handling checks. Regression tests cover Windows folders,
+short paths, junctions, drive letters, and file locking. GitHub hosts the
+finished source and release; hosted builds are optional manual workflows.
+Direct library import was verified on rekordbox 7.2.19. This is not a claim of
+compatibility with every version or drive arrangement. Keep a library backup
+before use.
+
+## About the original project
 
 rbxport is a music library management app inspired by rekordbox. It keeps its
 feature set deliberately small, aiming for a faster, simpler user experience.
