@@ -20,12 +20,28 @@ function Pick([string]$Prompt,[string]$Default) {
 if (-not $NonInteractive) {
     Write-Host 'Music to Rekordbox - personal setup' -ForegroundColor Cyan
     Write-Host 'Runs only when you click the button. Choose folders or individual ZIP/audio files.'
+    $previous = $null
+    if (Test-Path -LiteralPath $ConfigPath) { try { $previous = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch {} }
     $Sources = @()
-    do {
-        $source = Read-Host 'Full inbox folder or file path (Enter when finished)'
-        if (-not [string]::IsNullOrWhiteSpace($source)) { $Sources += $source.Trim().Trim('"') }
-    } while (-not [string]::IsNullOrWhiteSpace($source))
-    $MusicRoot = Pick 'WHERE SONGS LIVE - permanent music folder' (Join-Path ([Environment]::GetFolderPath('MyMusic')) 'WHERE SONGS LIVE')
+    while ($true) {
+        $prompt = if ($Sources.Count -gt 0) { 'Add another inbox? Enter = browse, paste a path, or D = done' } else { 'Inbox folder: Enter = browse, or paste a folder/file path' }
+        $source = ([string](Read-Host $prompt)).Trim().Trim('"')
+        if ($source -match '^d(one)?$') { if ($Sources.Count -gt 0) { break } else { Write-Host 'Choose at least one inbox.' -ForegroundColor Yellow; continue } }
+        if (-not $source) {
+            $start = if ($previous -and @($previous.sources).Count -gt 0) { @($previous.sources)[0] } else { Join-Path $env:USERPROFILE 'Downloads' }
+            $source = Select-MusicFolder 'Choose a folder where your music downloads (ZIPs or audio files) land.' $start
+            if (-not $source) { if ($Sources.Count -gt 0) { break } else { Write-Host 'No folder chosen. Choose at least one inbox.' -ForegroundColor Yellow; continue } }
+        }
+        $Sources += $source
+        Write-Host ('  Inbox added: ' + $source) -ForegroundColor DarkGray
+    }
+    $defaultRoot = if ($previous -and $previous.musicRoot) { $previous.musicRoot } else { Join-Path ([Environment]::GetFolderPath('MyMusic')) 'WHERE SONGS LIVE' }
+    $MusicRoot = ([string](Read-Host ('WHERE SONGS LIVE - permanent music folder. Enter = browse, or paste a path [' + $defaultRoot + ']'))).Trim().Trim('"')
+    if (-not $MusicRoot) {
+        $MusicRoot = Select-MusicFolder 'Choose WHERE SONGS LIVE - the permanent folder rekordbox will play your music from.' $defaultRoot
+        if (-not $MusicRoot) { $MusicRoot = $defaultRoot }
+    }
+    Write-Host ('  WHERE SONGS LIVE: ' + $MusicRoot) -ForegroundColor DarkGray
     $Recursive = (Pick 'Include inbox subfolders? Y/N' 'N') -match '^y'
     $choice = Pick 'Layout: 1 Artist/Album/Filename, 2 Preserve inbox/ZIP folders, 3 Flat' '1'
     $Layout = switch ($choice) { '1' {'ArtistAlbum'} '2' {'PreserveFolders'} '3' {'Flat'} default {throw 'Choose layout 1, 2, or 3.'} }

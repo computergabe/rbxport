@@ -259,4 +259,19 @@ function Invoke-MusicLibraryImport {
     $result.report
 }
 
-Export-ModuleMember -Function Write-MusicJson, Read-MusicSettings, Assert-MusicPath, Get-MusicPending, Add-MusicPending, Get-MusicSources, Read-MusicTags, Get-MusicSegment, Get-MusicDestination, Copy-VerifiedMusic, Save-MusicSource, Invoke-MusicLibraryImport
+function Select-MusicFolder {
+    param([string]$Description,[string]$Start)
+    # Windows folder picker; returns $null when cancelled.
+    Add-Type -AssemblyName System.Windows.Forms
+    $owner = New-Object System.Windows.Forms.Form -Property @{TopMost=$true;ShowInTaskbar=$false}
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    try {
+        $dialog.Description = $Description
+        $dialog.ShowNewFolderButton = $true
+        if ($Start -and (Test-Path -LiteralPath $Start -PathType Container)) { $dialog.SelectedPath = $Start }
+        if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { return $dialog.SelectedPath }
+        $null
+    } finally { $dialog.Dispose(); $owner.Dispose() }
+}
+
+Export-ModuleMember -Function Write-MusicJson, Read-MusicSettings, Assert-MusicPath, Get-MusicPending, Add-MusicPending, Get-MusicSources, Read-MusicTags, Get-MusicSegment, Get-MusicDestination, Copy-VerifiedMusic, Save-MusicSource, Invoke-MusicLibraryImport, Select-MusicFolder

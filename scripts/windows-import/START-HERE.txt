@@ -11,8 +11,11 @@ https://aka.ms/vc14/vc_redist.x64.exe
 3. Open PowerShell in this folder and run:
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
 4. Choose sources, WHERE SONGS LIVE, layout, Copy/Move, and import preference.
+   Press Enter at a folder question to browse instead of typing a path.
 5. Finish downloading; close rekordbox and its tray agent.
    Click the Music to Rekordbox desktop button. Reopen rekordbox afterward.
+   Press Enter for your saved inbox, F to pick a folder for this run only,
+   or S to change settings.
 
 Runs once per click; no background watcher. XML is not needed.
 Copy keeps downloads. Move removes them only after verification and queuing.
@@ -24,5 +27,5 @@ This unsigned independent release is not an official upstream release.
 Source: https://github.com/computergabe/rbxport
 License: GPL-2.0-or-later. License text and build information are included.
 
-Version 1.2.1 blocks in-app updates. Updates and bug reports open this fork on GitHub.
+Version 1.2.2 adds folder pickers. In-app updates stay blocked. Updates and bug reports open this fork on GitHub.
 For upgrades, close RBXPORT and replace package files; keep your configuration and queue.

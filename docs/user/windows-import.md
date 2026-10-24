@@ -14,7 +14,7 @@ for manual upgrades. The About pane and Help menu open the fork release page in 
 
 The original `windows-music-1.2.0` download predates this protection: its upstream
 updater must remain disabled. An already downloaded update may still install
-on exit. Upgrade to 1.2.1; the older ZIP remains unchanged for release history.
+on exit. Upgrade to 1.2.1 or later; the older ZIP remains unchanged for release history.
 
 Bug reporting opens a new GitHub issue in this fork, with no automatic log upload or upstream reporting-service request. Release notes, update checks, and the GitHub button also point to this fork. Original author credits and social/donation links remain attributed to the original developer.
 
@@ -23,14 +23,14 @@ Bug reporting opens a new GitHub issue in this fork, with no automatic log uploa
 Close RBXPORT before replacing its files. If an upstream version was installed by
 an earlier update, uninstall that separate app using Windows Installed Apps;
 its uninstaller removes its silent-update task. Keep your music and settings.
-Extract the 1.2.1 package over your existing portable package folder. It contains
+Extract the 1.2.1 or later package over your existing portable package folder. It contains
 no personal configuration, queue, or logs, so retain those existing files.
 Your shortcut continues to work when the package stays in the same folder.
 Do not run setup again unless you want to change your folders or import settings.
 
 ## Download and first setup
 
-Download the [Windows music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.1).
+Download the [Windows music release](https://github.com/computergabe/rbxport/releases/latest).
 The unsigned package needs Windows x64, Windows PowerShell 5.1, WebView2, and
 the current [Microsoft Visual C++ x64 Redistributable](https://aka.ms/vc14/vc_redist.x64.exe).
 These runtimes may already be installed. If Windows reports a missing
@@ -48,11 +48,23 @@ explains the requirement. Build tools are only needed to compile from source.
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
    ```
 
-4. Answer the setup prompts, review the settings, and save them. Setup creates
+4. Answer the setup prompts, review the settings, and save them. At each folder
+   question, press Enter to open a folder picker or paste a full path. Setup creates
    **Music → Rekordbox** on your actual desktop, including a redirected desktop.
 5. Finish downloading your music, close rekordbox and its tray agent plus other
-   RBXPORT instances, and click the button. Read its result, press Enter to
-   close, and reopen rekordbox.
+   RBXPORT instances, and click the button. Choose an option, read the result,
+   press Enter to close, and reopen rekordbox.
+
+The button opens with a short menu:
+
+| Key | What happens |
+| --- | --- |
+| Enter | Import from your saved inbox folders. |
+| F | Pick any folder in a Windows folder picker and import from it this time only. Saved settings are unchanged. |
+| S | Rerun setup to change inboxes, WHERE SONGS LIVE, layout, or other preferences. |
+
+From PowerShell, `-Source 'D:\Some Folder'` or `-PickFolder` imports from one
+folder or file without the menu. The picked source must be outside WHERE SONGS LIVE.
 
 The setup asks for:
 

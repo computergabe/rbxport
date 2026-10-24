@@ -123,6 +123,15 @@ $config.musicRoot=Join-Path $root 'Disconnected drive';Write-MusicJson $configPa
 $offline=Audio (Join-Path $other 'offline.wav');Run 1
 Assert (Test-Path -LiteralPath $offline) 'Offline storage lost source.'
 $config.musicRoot=$music;Write-MusicJson $configPath $config
+$picked=Join-Path $root 'Picked'; New-Item -ItemType Directory -Path $picked | Out-Null
+$pickedTrack=Audio (Join-Path $picked 'picked.wav'); $notPicked=Audio (Join-Path $other 'not-picked.wav')
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Music-To-Rekordbox.ps1') -NoPause -Source $picked
+Assert ($LASTEXITCODE -eq 0) "Unexpected exit for a picked folder: $LASTEXITCODE"
+Assert (-not (Test-Path -LiteralPath $pickedTrack)) 'Picked folder was not imported.'
+Assert (Test-Path -LiteralPath $notPicked) 'Saved inbox processed during a picked-folder run.'
+Assert (@((Read-MusicSettings $configPath).sources) -notcontains $picked) 'Picked folder replaced saved settings.'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Music-To-Rekordbox.ps1') -NoPause -Source $music
+Assert ($LASTEXITCODE -eq 1) 'Picking WHERE SONGS LIVE as a source was accepted.'
 & (Join-Path $package 'Create-Desktop-Shortcut.ps1') -DesktopDirectory $desktop
 $link=@(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk')[0]
 $ascii=Join-Path $desktop 'inspect.lnk';Copy-Item -LiteralPath $link.FullName -Destination $ascii

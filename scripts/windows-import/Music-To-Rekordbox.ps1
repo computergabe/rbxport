@@ -1,6 +1,9 @@
 ﻿param(
     [string]$ConfigPath = (Join-Path $PSScriptRoot 'Music-Import.config.json'),
     [string]$Executable = (Join-Path $PSScriptRoot 'RBXPORT-Music\rbxport.exe'),
+    # Import from this folder or file once instead of the saved inboxes.
+    [string]$Source,
+    [switch]$PickFolder,
     [switch]$NoPause
 )
 $ErrorActionPreference = 'Stop'
@@ -23,6 +26,31 @@ try {
         & (Join-Path $PSScriptRoot 'Setup-Music-Import.ps1') -ConfigPath $ConfigPath
     }
     $config = Read-MusicSettings $ConfigPath
+    if (-not $Source -and -not $PickFolder -and -not $NoPause) {
+        Write-Host ''
+        Write-Host '  MUSIC  ->  REKORDBOX' -ForegroundColor Cyan
+        Write-Host ('  Saved inbox: ' + (@($config.sources) -join ', '))
+        Write-Host ''
+        Write-Host '  [Enter]  Import from the saved inbox'
+        Write-Host '  [F]      Pick a folder to import this time'
+        Write-Host '  [S]      Change settings (inbox, WHERE SONGS LIVE, layout)'
+        $choice = ([string](Read-Host '  Choose')).Trim()
+        if ($choice -match '^f') { $PickFolder = $true }
+        elseif ($choice -match '^s') {
+            & (Join-Path $PSScriptRoot 'Setup-Music-Import.ps1') -ConfigPath $ConfigPath -NoShortcut
+            $config = Read-MusicSettings $ConfigPath
+        }
+    }
+    if ($PickFolder) {
+        $Source = Select-MusicFolder 'Choose a folder with ZIP or audio files to import into rekordbox.' (@($config.sources)[0])
+        if (-not $Source) { throw 'No folder chosen. Nothing was imported.' }
+    }
+    if ($Source) {
+        if (-not [System.IO.Path]::IsPathRooted($Source) -or -not (Test-Path -LiteralPath $Source)) { throw "Source is unavailable: $Source" }
+        $Source = [System.IO.Path]::GetFullPath($Source)
+        if (($Source.TrimEnd('\') + '\').StartsWith(($config.musicRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw 'Pick a folder outside WHERE SONGS LIVE.' }
+        $config.sources = @($Source)
+    }
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw 'The universal RBXPORT app is missing.' }
     if ($config.importToRekordbox -and (Get-Process | Where-Object { $_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$' })) {
         throw 'Close rekordbox, its tray agent, and other RBXPORT instances before moving or importing music.'
@@ -38,10 +66,10 @@ try {
     Log ('  Layout: ' + $config.layout + '   Originals: ' + $config.originals)
     $sources = @(Get-MusicSources $config $PSScriptRoot)
     $prepared = 0; $sourceErrors = 0
-    foreach ($source in $sources) {
-        Log ('  Preparing: ' + $source.path)
+    foreach ($inboxItem in $sources) {
+        Log ('  Preparing: ' + $inboxItem.path)
         try {
-            $result = Save-MusicSource $source $config $Executable $PSScriptRoot $queue $reports
+            $result = Save-MusicSource $inboxItem $config $Executable $PSScriptRoot $queue $reports
             $prepared += $result.tracks
             Log ('  Verified ' + $result.tracks + ' track(s); original policy: ' + $result.originals)
         } catch { $sourceErrors++; $failed=$true; Log ('  Source needs attention: ' + $_.Exception.Message) }
