@@ -1666,6 +1666,73 @@ fn an_analysis_is_registered_on_the_track_with_the_usual_bookkeeping() {
 }
 
 #[test]
+fn analysis_files_are_fingerprinted_in_content_file_as_rekordbox_does() {
+    use rbl_db::write::AnalysisWrite;
+    let mut f = fixture();
+    let share = f.writer.library().location().share_root.clone();
+    let write = |relative: &str, ext: &str, bytes: &[u8]| {
+        let path = share.join(relative.trim_start_matches('/')).with_extension(ext);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    };
+    let first = "/PIONEER/USBANLZ/083/dd812-b81b-408d-8395-279a23636bf8/ANLZ0000.DAT";
+    for (ext, bytes) in [("DAT", b"dat".as_slice()), ("EXT", b"ext"), ("2EX", b"2ex")] {
+        write(first, ext, bytes);
+    }
+    let analysis = |path| AnalysisWrite { bpm_x100: 13_400, key: None, analysis_path: path, length_sec: None };
+    let changed = f.writer.set_analysis(&track_id(0), &analysis(first)).unwrap();
+
+    // One row per file present, keyed and shaped as rekordbox keys its own.
+    let rows: Vec<(String, String, String, i64, String, i64, i64)> = {
+        let mut statement = f.conn().prepare(
+            "SELECT ID, Path, Hash, Size, rb_local_path, rb_priority, rb_local_usn FROM contentFile
+             WHERE ContentID = ?1 AND rb_local_deleted = 0 ORDER BY rb_local_usn").unwrap();
+        statement.query_map([track_id(0)], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)))
+            .unwrap().collect::<rusqlite::Result<_>>().unwrap()
+    };
+    assert_eq!(rows.len(), 3, "no .3EX was written, so none is recorded");
+    let (id, path, hash, size, local, priority, _) = &rows[0];
+    assert_eq!(id, "083dd812-b81b-408d-8395-279a23636bf8_%2FPIONEER%2FUSBANLZ%2F083%2Fdd812-b81b-408d-8395-279a23636bf8%2FANLZ0000.DAT");
+    assert_eq!(path, first);
+    assert_eq!(hash, &format!("{:x}", md5_of(b"dat")));
+    assert_eq!(*size, 3);
+    assert!(std::path::Path::new(local).ends_with("ANLZ0000.DAT"));
+    assert_eq!(*priority, 50);
+    assert_eq!(rows.iter().map(|r| r.1.rsplit('.').next().unwrap().to_owned()).collect::<Vec<_>>(), ["DAT", "EXT", "2EX"]);
+    let counter: i64 = f.count("SELECT int_1 FROM agentRegistry WHERE registry_id = 'localUpdateCount'");
+    assert_eq!(counter, rows[2].6, "every row takes a local update number the counter covers");
+    assert_eq!(counter, changed.usn);
+
+    // Unchanged files are not re-stamped; a changed one is.
+    let before: Vec<i64> = rows.iter().map(|r| r.6).collect();
+    write(first, "EXT", b"ext, re-analysed");
+    f.writer.set_analysis(&track_id(0), &analysis(first)).unwrap();
+    let after: Vec<(String, i64, i64)> = {
+        let mut statement = f.conn().prepare(
+            "SELECT Path, Size, rb_local_usn FROM contentFile WHERE ContentID = ?1 AND rb_local_deleted = 0 ORDER BY Path").unwrap();
+        statement.query_map([track_id(0)], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().collect::<rusqlite::Result<_>>().unwrap()
+    };
+    let ext = after.iter().find(|r| r.0.ends_with(".EXT")).unwrap();
+    assert_eq!(ext.1, 16);
+    assert!(ext.2 > before[1]);
+    assert!(after.iter().filter(|r| !r.0.ends_with(".EXT")).all(|r| before.contains(&r.2)));
+
+    // A new set replaces the old one's rows, which are soft-deleted.
+    let second = "/PIONEER/USBANLZ/083/dd812-b81b-408d-8395-279a23636bf8/ANLZ0001.DAT";
+    for ext in ["DAT", "EXT", "2EX", "3EX"] {
+        write(second, ext, ext.as_bytes());
+    }
+    f.writer.set_analysis(&track_id(0), &analysis(second)).unwrap();
+    assert_eq!(f.count("SELECT COUNT(*) FROM contentFile WHERE Path LIKE '%ANLZ0001.%' AND rb_local_deleted = 0"), 4);
+    assert_eq!(f.count("SELECT COUNT(*) FROM contentFile WHERE Path LIKE '%ANLZ0000.%' AND rb_local_deleted = 1"), 3);
+}
+
+fn md5_of(bytes: &[u8]) -> impl std::fmt::LowerHex {
+    use md5::Digest as _;
+    md5::Md5::digest(bytes)
+}
+
+#[test]
 fn clearing_the_analysis_puts_the_row_back_to_unanalysed_and_lets_it_be_registered_again() {
     use rbl_db::write::{AnalysisWrite, ANALYSED_BY_THIS_APP};
     let mut f = fixture();

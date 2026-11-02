@@ -61,11 +61,23 @@
 //! `PWV7`, `PWVC`) and a `.3EX`; and set `AnalysisUpdated` and
 //! `TrackInfoUpdated` from NULL to 1.
 //!
+//! # Analysis file fingerprints
+//!
+//! rekordbox also records each analysis file in `contentFile`: the MD5 and
+//! size of the bytes on disk, keyed `<dir><uuid>_<Path with / as %2F>`. A
+//! track whose `AnalysisDataPath` names files with no such rows is analysed
+//! again from scratch: on 2026-10-30 rekordbox 7 re-analysed every track
+//! this app had analysed two days earlier into a new `ANLZ0001` set, while
+//! tracks whose rows matched their files were left alone [OBS]. Every write
+//! that authors analysis files therefore records them the way rekordbox
+//! does (see `record_analysis_files`), and soft-deletes rows for an older
+//! set of the same track, as rekordbox did for the replaced `ANLZ0000` rows.
+//!
 //! # What this deliberately will not do
 //!
-//! `contentCue`/`contentFile` are **not implemented**. Their values are still
-//! unexplained, and a wrong one in a 38,681-track collection is not
-//! recoverable by undo. See [`Unsupported`].
+//! `contentCue` is **not implemented**. Its values are still unexplained,
+//! and a wrong one in a 38,681-track collection is not recoverable by undo.
+//! See [`Unsupported`].
 //! [`Writer::set_analysis`] registers an analysis this app made: the BPM,
 //! the key, where the files went, and the length. `Analysed` is a bitfield
 //! whose individual bits are not all explained (`analysed_bits`), but its
@@ -76,17 +88,12 @@
 //! keeping the RBX-authored grid and generating its remaining files [OBS].
 //! A track rekordbox had already analysed keeps any other value it carried.
 //!
-//! # What this deliberately will not do
-//!
-//! `contentCue`/`contentFile` are **not implemented**. Their values are still
-//! unexplained, and a wrong one in a 38,681-track collection is not
-//! recoverable by undo. See [`Unsupported`].
-
 use std::path::{Path, PathBuf};
 
 use rbl_core::ids::{Rng, MAX_CONTENT_ID, MAX_CUE_ID, MAX_PLAYLIST_ID};
 use rbl_core::time;
 use rusqlite::types::Value;
+use md5::Digest as _;
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
 use crate::{is_rekordbox_running, DbError, Library, OpenMode, Result};
@@ -97,7 +104,12 @@ const USN_TABLES: &[&str] = &[
     "djmdPlaylist",
     "djmdSongPlaylist",
     "djmdSongHotCueBanklist",
+    "contentFile",
 ];
+
+/// Analysis files rekordbox fingerprints in `contentFile`, in the order it
+/// records them.
+const ANALYSIS_EXTENSIONS: &[&str] = &["DAT", "EXT", "2EX", "3EX"];
 
 /// `djmdContent.Analysed` for a complete RBX-authored analysis.
 ///
@@ -224,7 +236,7 @@ impl TrackField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Unsupported {
-    /// Nothing is known about what rekordbox does with these.
+    /// Nothing is known about what rekordbox does with `contentCue`.
     ContentCueOrFile,
 }
 
@@ -233,7 +245,7 @@ impl Unsupported {
     pub const fn reason(self) -> &'static str {
         match self {
             Self::ContentCueOrFile =>
-                "contentCue and contentFile are not understood and must not be touched",
+                "contentCue is not understood and must not be touched",
         }
     }
 }
@@ -1262,6 +1274,7 @@ impl Writer {
         analysis: &AnalysisRegistration<'_>,
     ) -> Result<Changed> {
         self.prepare()?;
+        let share = self.library.location().share_root.clone();
         let stamp = time::now();
         let tx = self.library.connection_mut()
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -1286,6 +1299,7 @@ impl Writer {
                 content
             ],
         )?;
+        let usn = record_analysis_files(&tx, &share, content, usn, &stamp, &mut self.rng)?;
         set_counter(&tx, usn)?;
         tx.commit()?;
         Ok(Changed { rows, usn })
@@ -1816,6 +1830,7 @@ impl Writer {
     /// Persist an edited grid's tempo and invalidate cached analysis consumers.
     pub fn save_grid_revision(&mut self, content: &str, bpm: u32) -> Result<()> {
         self.prepare()?;
+        let share = self.library.location().share_root.clone();
         let tx = self.library.connection_mut().transaction_with_behavior(TransactionBehavior::Immediate)?;
         let previous: Option<String> = tx.query_row("SELECT AnalysisUpdated FROM djmdContent WHERE ID=?1 AND rb_local_deleted=0", [content], |r| r.get(0))?;
         // modifyAnalysisUpdated increments the first UTF-16 code unit, not
@@ -1823,8 +1838,10 @@ impl Writer {
         let unit = previous.as_deref().unwrap_or("").encode_utf16().next().unwrap_or(0).wrapping_add(1);
         let revision = if unit == 0 { String::new() } else { String::from_utf16_lossy(&[unit]) };
         let usn = next_usn(&tx)?;
-        let rows = tx.execute("UPDATE djmdContent SET BPM=?2, AnalysisUpdated=?5, rb_local_usn=?3, updated_at=?4 WHERE ID=?1 AND rb_local_deleted=0", params![content, bpm, usn, time::now(), revision])?;
+        let stamp = time::now();
+        let rows = tx.execute("UPDATE djmdContent SET BPM=?2, AnalysisUpdated=?5, rb_local_usn=?3, updated_at=?4 WHERE ID=?1 AND rb_local_deleted=0", params![content, bpm, usn, stamp, revision])?;
         if rows != 1 { return Err(DbError::WriteRefused("Track no longer exists".into())); }
+        let usn = record_analysis_files(&tx, &share, content, usn, &stamp, &mut self.rng)?;
         set_counter(&tx, usn)?;
         tx.commit()?;
         Ok(())
@@ -2225,8 +2242,10 @@ impl Writer {
             }
         }
         let usn = next_usn(&tx)?;
+        let stamp = time::now();
         let rows = tx.execute("UPDATE djmdContent SET BPM=?1, AnalysisDataPath=COALESCE(?2, AnalysisDataPath), AnalysisUpdated=CAST(COALESCE(AnalysisUpdated, '0') AS INTEGER)+CASE WHEN ?2 IS NULL THEN 0 ELSE 1 END, rb_local_usn=?3, updated_at=?4 WHERE ID=?5 AND rb_local_deleted=0",
-            params![bpm_x100, next_path, usn, time::now(), content])?;
+            params![bpm_x100, next_path, usn, stamp, content])?;
+        let usn = if next_path.is_some() { record_analysis_files(&tx, &location.share_root, content, usn, &stamp, &mut self.rng)? } else { usn };
         set_counter(&tx, usn)?;
         tx.commit()?;
         Ok(Changed { rows, usn })
@@ -2456,6 +2475,7 @@ impl Writer {
     /// nothing names.
     pub fn set_analysis(&mut self, content: &str, analysis: &AnalysisWrite<'_>) -> Result<Changed> {
         self.prepare()?;
+        let share = self.library.location().share_root.clone();
         let stamp = time::now();
         let tx = self.library.connection_mut()
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -2498,6 +2518,7 @@ impl Writer {
                 CONTENT_LINK_LOCAL
             ],
         )?;
+        let usn = record_analysis_files(&tx, &share, content, usn, &stamp, &mut self.rng)?;
         set_counter(&tx, usn)?;
         tx.commit()?;
         Ok(Changed { rows, usn })
@@ -2731,6 +2752,86 @@ fn write_artwork_sizes(target: &Path, bytes: &[u8]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Records the analysis files of `content`'s current `AnalysisDataPath` in
+/// `contentFile`, as rekordbox does after analysing a track itself.
+///
+/// Each file present on disk gets a row holding the MD5 and size of its
+/// bytes; a row whose fingerprint already matches is left untouched, so an
+/// unchanged file does not look changed to the sync. Rows for another set of
+/// this track's analysis files (an older `ANLZ0000` beside a new
+/// `ANLZ0001`) are soft-deleted. Every changed row takes the next local
+/// update number after `usn`; the last one used is returned. A library
+/// without the table (a fixture, an old version) is left as it is.
+fn record_analysis_files(conn: &Connection, share: &Path, content: &str, usn: i64, stamp: &str, rng: &mut Rng) -> Result<i64> {
+    /// A recorded row's `Hash`, `Size`, `ContentID` and `rb_local_deleted`.
+    type Fingerprint = (Option<String>, Option<i64>, Option<String>, i64);
+    let has_table: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'contentFile'", [], |r| r.get(0))?;
+    let relative: Option<String> = conn.query_row(
+        "SELECT AnalysisDataPath FROM djmdContent WHERE ID = ?1 AND rb_local_deleted = 0", [content], |r| r.get(0))
+        .optional()?.flatten();
+    let Some(relative) = relative.filter(|p| p.starts_with("/PIONEER/USBANLZ/") && p.len() > 4 && p[p.len() - 4..].eq_ignore_ascii_case(".DAT")) else { return Ok(usn) };
+    if has_table == 0 { return Ok(usn) }
+    // `/PIONEER/USBANLZ/083/dd812-…/ANLZ0000.DAT` → `083dd812-…`, the prefix
+    // of every row rekordbox keys for that folder.
+    let segments: Vec<&str> = relative.split('/').collect();
+    let prefix = match segments.as_slice() {
+        ["", "PIONEER", "USBANLZ", head, tail, _] => format!("{head}{tail}"),
+        _ => return Ok(usn),
+    };
+    let stem = &relative[..relative.len() - "DAT".len()];
+    let mut usn = usn;
+    let mut current = Vec::new();
+    for ext in ANALYSIS_EXTENSIONS {
+        let path = format!("{stem}{ext}");
+        let local = rbl_anlz::resolve(share, &path);
+        let Ok(bytes) = std::fs::read(&local) else { continue };
+        let hash = format!("{:x}", md5::Md5::digest(&bytes));
+        let size = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
+        let id = format!("{prefix}_{}", path.replace('%', "%25").replace('/', "%2F"));
+        current.push(path.clone());
+        let existing: Option<Fingerprint> = conn.query_row(
+            "SELECT Hash, Size, ContentID, COALESCE(rb_local_deleted, 0) FROM contentFile WHERE ID = ?1", [&id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).optional()?;
+        if let Some((old_hash, old_size, owner, deleted)) = &existing {
+            if old_hash.as_deref() == Some(hash.as_str()) && *old_size == Some(size) && owner.as_deref() == Some(content) && *deleted == 0 {
+                continue;
+            }
+        }
+        usn = usn.checked_add(1).ok_or_else(|| DbError::WriteRefused("local update counter overflow".into()))?;
+        // rekordbox stores the native form, `C:\…\share\PIONEER\USBANLZ\…`.
+        let local = if cfg!(windows) { local.to_string_lossy().replace('/', "\\") } else { local.to_string_lossy().into_owned() };
+        if existing.is_some() {
+            conn.execute(
+                "UPDATE contentFile SET ContentID = ?2, Path = ?3, Hash = ?4, Size = ?5, rb_local_path = ?6,
+                     rb_file_hash_dirty = 0, rb_file_size_dirty = 0, rb_local_deleted = 0,
+                     rb_local_usn = ?7, updated_at = ?8
+                 WHERE ID = ?1",
+                params![id, content, path, hash, size, local, usn, stamp])?;
+        } else {
+            conn.execute(
+                "INSERT INTO contentFile (ID, ContentID, Path, Hash, Size, rb_local_path, rb_insync_hash,
+                     rb_insync_local_usn, rb_file_hash_dirty, rb_local_file_status, rb_in_progress,
+                     rb_process_type, rb_temp_path, rb_priority, rb_file_size_dirty, UUID, rb_data_status,
+                     rb_local_data_status, rb_local_deleted, rb_local_synced, usn, rb_local_usn, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, 0, 0, 0, 0, NULL, 50, 0, ?7, 0, 0, 0, 0, NULL, ?8, ?9, ?9)",
+                params![id, content, path, hash, size, local, rng.uuid4(), usn, stamp])?;
+        }
+    }
+    let mut stale = conn.prepare(
+        "SELECT ID, Path FROM contentFile WHERE ContentID = ?1 AND rb_local_deleted = 0 AND Path LIKE '/PIONEER/USBANLZ/%'")?;
+    let rows: Vec<(String, String)> = stale.query_map([content], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stale);
+    for (id, path) in rows.into_iter().filter(|(_, path)| !current.contains(path)) {
+        tracing::debug!(%content, %path, "soft-deleting a replaced analysis file's fingerprint");
+        usn = usn.checked_add(1).ok_or_else(|| DbError::WriteRefused("local update counter overflow".into()))?;
+        conn.execute("UPDATE contentFile SET rb_local_deleted = 1, rb_local_usn = ?2, updated_at = ?3 WHERE ID = ?1",
+            params![id, usn, stamp])?;
+    }
+    Ok(usn)
 }
 
 pub(crate) fn next_usn(conn: &Connection) -> Result<i64> {
