@@ -56,6 +56,12 @@ explains the requirement. Build tools are only needed to compile from source.
    **Import a folder...** to import any other folder once. Progress appears in
    the window. Reopen rekordbox when it says Finished.
 
+With **Analyze them** ticked (the default), each new track gets its beat grid,
+BPM, key and waveforms written into the library while it is registered, a few
+seconds per track. rekordbox 7 keeps that analysis: it does not ask to analyze
+the track again, and Beat Sync works. A track that cannot be analyzed is still
+imported and is listed in the output; analyze it in rekordbox or RBXPORT.
+
 Settings changed in the window are saved when you import or close it. **Import a
 folder...** never changes the saved inboxes; the folder must be outside your
 music library folder.
@@ -86,6 +92,7 @@ The settings are:
 | Originals | Copy keeps downloads (default). Move removes a ZIP or standalone audio file only after verification and queue persistence. |
 | Artist folders | Prefer Album Artist with Track Artist fallback (default), or always use Track Artist. |
 | Library import | Register the organized files in rekordbox, or organize only and retain them in the pending queue. |
+| Analyze | Analyze newly registered tracks with the RBXport (Electronic Music) preset while importing (default on). Re-importing a registered track that was never analyzed, or was analyzed by RBXPORT before 1.3.0, analyzes it again. |
 
 Sources must be outside the permanent storage folder. Use finished downloads.
 Unsupported standalone file extensions are left alone. The recognized audio

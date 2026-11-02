@@ -12,20 +12,22 @@ music folder, organize ZIPs and individual audio files, and register their
 tracks in the active rekordbox library with a desktop button.
 This is an independent Windows release, not an official upstream release.
 
-Version **1.2.1** prevents upstream updates from replacing this fork. Update checks
-and release notes open this fork's releases in your browser; upgrades are manual.
+Version **1.3.0** adds a Music to Rekordbox window and analyzes imported tracks
+with the RBXport (Electronic Music) preset, in a form rekordbox keeps: no
+re-analysis prompt, and Beat Sync works. Upstream updates stay blocked; update
+checks and release notes open this fork's releases, and upgrades are manual.
 Bug reports open [this fork's GitHub issues](https://github.com/computergabe/rbxport/issues).
 See the [upgrade instructions](docs/user/windows-import.md#upgrade-from-120) if you
 already use 1.2.0. Your music, settings, and pending import queue can stay in place.
 
 ## Download and set up
 
-[Download the Windows x64 music release](https://github.com/computergabe/rbxport/releases/tag/windows-music-1.2.1)
+[Download the Windows x64 music release](https://github.com/computergabe/rbxport/releases/latest)
 or [read the setup and PowerShell guide](docs/user/windows-import.md).
 
 1. Extract the package to a permanent writable folder.
 2. Open the included RBXPORT app once. Disable Library Protection when you
-   intend to allow imports. In-app updates are blocked in 1.2.1; close the app.
+   intend to allow imports. In-app updates are blocked in this fork; close the app.
 3. Open PowerShell in the extracted folder and run:
 
    ```powershell
@@ -76,7 +78,7 @@ The app supports repeated `--import <path>` arguments with
 
 See the [PowerShell guide](docs/user/windows-import.md) for examples, reports,
 recovery, Windows prerequisites, Tauri builds, and packaging instructions.
-Use this fork's default branch or the `windows-music-1.2.1` release tag.
+Use this fork's default branch or the `windows-music-1.3.0` release tag.
 
 The full Windows workspace suite and Clippy checks pass locally, along with
 frontend lint, unit, build, bundle-budget, Chromium UI, and disposable
