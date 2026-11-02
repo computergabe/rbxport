@@ -1,5 +1,9 @@
 ﻿Set-StrictMode -Version Latest
 $script:AudioExtensions = @('.mp3','.m4a','.aac','.flac','.wav','.aiff','.aif','.ogg','.opus')
+$script:DefaultNamePatterns = @('%track%. %artist% - %title%','%artist% - %title%')
+# Album folders: "Artist - Album (Year)", "Artist - Album", or just the album.
+$script:FolderPatterns = @('%albumartist% - %album% (%year%)','%albumartist% - %album%')
+$script:PatternFields = @('artist','title','album','albumartist','track','year','dummy')
 
 function Write-MusicJson {
     param([string]$Path, $Value)
@@ -16,11 +20,20 @@ function Read-MusicSettings {
     param([string]$Path)
     $config = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     if ($config.version -ne 1 -or @($config.sources).Count -eq 0) { throw 'Invalid music inbox configuration.' }
-    # Settings saved before analysis existed analyze new tracks by default.
+    # Settings saved before these options existed get their defaults.
     if (-not $config.PSObject.Properties['analyze']) { $config | Add-Member -NotePropertyName analyze -NotePropertyValue $true }
-    foreach ($name in @('recursive','importToRekordbox','analyze')) {
+    if (-not $config.PSObject.Properties['tagFromNames']) { $config | Add-Member -NotePropertyName tagFromNames -NotePropertyValue $true }
+    if (-not $config.PSObject.Properties['filenamePatterns']) { $config | Add-Member -NotePropertyName filenamePatterns -NotePropertyValue $script:DefaultNamePatterns }
+    if (-not $config.PSObject.Properties['defaultAlbum']) { $config | Add-Member -NotePropertyName defaultAlbum -NotePropertyValue 'Dub Plates' }
+    if (-not $config.PSObject.Properties['artistNames']) { $config | Add-Member -NotePropertyName artistNames -NotePropertyValue @() }
+    if (-not $config.PSObject.Properties['bpmRange']) { $config | Add-Member -NotePropertyName bpmRange -NotePropertyValue '70-180' }
+    if ($config.bpmRange -isnot [string] -or -not (Test-MusicBpmRange $config.bpmRange)) { throw 'Invalid bpmRange setting; use min-max between 40 and 300, e.g. 90-180.' }
+    foreach ($name in @('recursive','importToRekordbox','analyze','tagFromNames')) {
         if ($config.$name -isnot [bool]) { throw "Invalid $name setting." }
     }
+    if ($config.defaultAlbum -isnot [string]) { throw 'Invalid defaultAlbum setting.' }
+    foreach ($name in @($config.artistNames)) { if ($name -isnot [string] -or [string]::IsNullOrWhiteSpace($name)) { throw 'Invalid artistNames setting.' } }
+    foreach ($pattern in @($config.filenamePatterns)) { Assert-MusicPattern $pattern }
     if ($config.layout -notin @('ArtistAlbum','PreserveFolders','Flat') -or $config.originals -notin @('Move','Copy') -or $config.artistFolder -notin @('AlbumArtist','TrackArtist')) { throw 'Unsupported organization setting.' }
     foreach ($path in @($config.sources) + @($config.musicRoot)) {
         if ([string]::IsNullOrWhiteSpace($path) -or -not [System.IO.Path]::IsPathRooted($path)) { throw 'Choose full source and storage paths.' }
@@ -135,8 +148,139 @@ function Get-MusicDestination {
     Assert-MusicPath (Join-Path $Config.musicRoot $relativePath) $Config.musicRoot
 }
 
+function Test-MusicBpmRange {
+    # "min-max" between 40 and 300: the analysis BPM range. A tempo outside it
+    # is halved or doubled into it, as in rekordbox's Analysis Setting.
+    param([string]$Range)
+    if ($Range -notmatch '^\s*(\d{2,3})\s*-\s*(\d{2,3})\s*$') { return $false }
+    [int]$Matches[1] -ge 40 -and [int]$Matches[2] -le 300 -and [int]$Matches[1] -lt [int]$Matches[2]
+}
+
+function Assert-MusicPattern {
+    param([string]$Pattern)
+    $fields = @([regex]::Matches($Pattern,'%([^%]*)%') | ForEach-Object { $_.Groups[1].Value.ToLowerInvariant() })
+    if ($fields.Count -eq 0) { throw "Filename pattern has no %fields%: $Pattern" }
+    foreach ($field in $fields) { if ($field -notin $script:PatternFields) { throw "Unknown field %$field% in filename pattern: $Pattern" } }
+}
+
+function ConvertFrom-MusicPattern {
+    # Mp3tag-style Filename -> Tag: %field% placeholders between literal text.
+    # Spaces in the literal text must match first. A second, looser pass lets
+    # a separator lose the space on one side, so "immix- back 2 basics" still
+    # splits at the dash while "missing-tags" does not.
+    param([string]$Text,[string]$Pattern)
+    $Text = $Text.Trim()
+    foreach ($loose in @($false,$true)) {
+        $regex = '^'
+        foreach ($part in [regex]::Split($Pattern,'(%[^%]*%)')) {
+            if ($part -match '^%([^%]*)%$') {
+                $field = $Matches[1].ToLowerInvariant()
+                $regex += switch ($field) { 'track' {'(?<track>\d{1,3})'} 'year' {'(?<year>\d{4})'} default {"(?<$field>.+?)"} }
+            } elseif ($part) {
+                $literal = [regex]::Escape($part.Trim()) -replace '(\\ )+','\s+'
+                $before = $part -match '^\s'; $after = $part -match '\s$'
+                if ($loose -and $before -and $after) { $regex += "(?:\s+$literal\s*|\s*$literal\s+)" }
+                else { $regex += $(if ($before) {'\s+'}) + $literal + $(if ($after) {'\s+'}) }
+            }
+        }
+        $match = [regex]::Match($Text,$regex + '\s*$','IgnoreCase')
+        if (-not $match.Success) { continue }
+        $result = @{}
+        foreach ($field in $script:PatternFields) {
+            $group = $match.Groups[$field]
+            if ($group.Success -and $field -ne 'dummy') { $result[$field] = $group.Value.Trim() }
+        }
+        if (@($result.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -eq 0) { return $result }
+    }
+    $null
+}
+
+function Get-MusicField {
+    # A report field, or $null when the report has none (strict mode).
+    param($Object,[string]$Name)
+    $property = $Object.PSObject.Properties[$Name]
+    if ($property) { $property.Value }
+}
+
+function Get-MusicArtistSpelling {
+    # An artist's preferred spelling from the artistNames setting, matched
+    # without regard to case; any other name is returned unchanged.
+    param([string]$Name,$Config)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $Name }
+    foreach ($known in @($Config.artistNames)) { if ($known -and $Name.Trim() -ieq $known.Trim()) { return $known.Trim() } }
+    $Name
+}
+
+function Get-MusicNameTags {
+    # The tags a file is missing, read from its file name and its folder's
+    # name. Only empty fields are filled; existing tags are never replaced.
+    # Returns the fields to write; -Effective merges them over the file's tags.
+    param([string]$File,[string]$Relative,$Tags,$Config,[switch]$Effective)
+    $fill = [ordered]@{}
+    if ($Config.tagFromNames) {
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($File)
+        $name = $null
+        foreach ($pattern in @($Config.filenamePatterns)) { $name = ConvertFrom-MusicPattern $stem $pattern; if ($name) { break } }
+        if (-not $name) { $name = @{} }
+        $folder = @{}
+        $directory = [System.IO.Path]::GetDirectoryName($Relative)
+        if ($directory) {
+            $leaf = [System.IO.Path]::GetFileName($directory)
+            foreach ($pattern in $script:FolderPatterns) { $parsed = ConvertFrom-MusicPattern $leaf $pattern; if ($parsed) { $folder = $parsed; break } }
+            if (-not $folder['album']) { $folder = @{album=$leaf.Trim()} }
+        }
+        # The reader falls back to the file name for a missing title.
+        if ($name['title'] -and ([string]::IsNullOrWhiteSpace((Get-MusicField $Tags 'title')) -or (Get-MusicField $Tags 'title') -eq $stem)) { $fill.title = $name['title'] }
+        if ($name['artist'] -and [string]::IsNullOrWhiteSpace((Get-MusicField $Tags 'artist'))) { $fill.artist = $name['artist'] }
+        # A name that fits no pattern but names a listed artist, as in
+        # "immix x rakjay ID new bass", is that artist's track.
+        if (-not $fill.Contains('artist') -and [string]::IsNullOrWhiteSpace((Get-MusicField $Tags 'artist'))) {
+            $named = @($Config.artistNames) | Where-Object { $_ -and $stem -match ('(?i)(^|\W)' + [regex]::Escape($_.Trim()) + '(\W|$)') } | Select-Object -First 1
+            if ($named) { $fill.artist = $named.Trim() }
+        }
+        if ([string]::IsNullOrWhiteSpace((Get-MusicField $Tags 'album'))) {
+            $album = @($name['album'],$folder['album'],$Config.defaultAlbum) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
+            if ($album) { $fill.album = $album }
+        }
+        if ([string]::IsNullOrWhiteSpace((Get-MusicField $Tags 'albumArtist'))) {
+            $albumArtist = @($name['albumartist'],$folder['albumartist']) | Where-Object { $_ } | Select-Object -First 1
+            if ($albumArtist) { $fill.albumArtist = $albumArtist }
+        }
+        if ([int](Get-MusicField $Tags 'trackNumber') -eq 0 -and $name['track']) { $fill.trackNumber = [int]$name['track'] }
+        # Listed artists take their preferred spelling, existing tags included.
+        foreach ($field in @('artist','albumArtist')) {
+            $current = if ($fill.Contains($field)) { $fill[$field] } else { Get-MusicField $Tags $field }
+            $spelled = Get-MusicArtistSpelling $current $Config
+            if ($spelled -and $spelled -cne $current) { $fill[$field] = $spelled }
+        }
+        $year = @($name['year'],$folder['year']) | Where-Object { $_ } | Select-Object -First 1
+        if ($year -and [int](Get-MusicField $Tags 'year') -eq 0) { $fill.year = [int]$year }
+    }
+    if (-not $Effective) { return $fill }
+    $merged = [ordered]@{}
+    foreach ($field in @('artist','albumArtist','album','title','trackNumber')) { $merged[$field] = Get-MusicField $Tags $field }
+    foreach ($field in $fill.Keys) { $merged[$field] = $fill[$field] }
+    [pscustomobject]$merged
+}
+
+function Write-MusicTags {
+    param([string]$Executable,[string]$Path,$Tags,[string]$Reports)
+    $id = [guid]::NewGuid().ToString('N')
+    $inputPath = Join-Path $Reports ($id + '-tags.json')
+    $reportPath = Join-Path $Reports ($id + '-tags-report.json')
+    $entry = [ordered]@{path=$Path}
+    foreach ($field in $Tags.Keys) { $entry[$field] = $Tags[$field] }
+    Write-MusicJson $inputPath @($entry)
+    $process = Start-Process -FilePath $Executable -ArgumentList ('--write-tags "' + $inputPath + '" --write-tags-report "' + $reportPath + '"') -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+    if (-not (Test-Path -LiteralPath $reportPath)) { throw 'The app did not return a tag report. Use the RBXPORT app included in this music package.' }
+    $result = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($process.ExitCode -ne 0 -or $result.ok -ne $true) { throw "Tags could not be written. Original retained. Report: $reportPath" }
+    Remove-Item -LiteralPath $inputPath,$reportPath -ErrorAction SilentlyContinue
+}
+
 function Copy-VerifiedMusic {
-    param([string]$Source,[string]$Destination,[string]$Root)
+    param([string]$Source,[string]$Destination,[string]$Root,$Tags,[string]$Executable,[string]$Reports)
+    if ($Tags -and $Tags.Count -gt 0) { return Copy-TaggedMusic $Source $Destination $Root $Tags $Executable $Reports }
     $destination = Assert-MusicPath $Destination $Root
     $hash = (Get-FileHash -LiteralPath $Source -Algorithm SHA256 -ErrorAction Stop).Hash
     if (Test-Path -LiteralPath $destination) {
@@ -158,6 +302,37 @@ function Copy-VerifiedMusic {
     [System.IO.File]::Move($temporary,$destination)
     if ((Get-FileHash -LiteralPath $destination).Hash -ne $hash) { throw 'Final file verification failed. Original retained.' }
     $destination
+}
+
+function Copy-TaggedMusic {
+    # The verified copy with tags written into it before it takes its final
+    # name. The original is never modified. Duplicates are recognised by the
+    # tagged result, so a repeated run finds its earlier copy.
+    param([string]$Source,[string]$Destination,[string]$Root,$Tags,[string]$Executable,[string]$Reports)
+    $destination = Assert-MusicPath $Destination $Root
+    $hash = (Get-FileHash -LiteralPath $Source -Algorithm SHA256 -ErrorAction Stop).Hash
+    $parent = [System.IO.Path]::GetDirectoryName($destination)
+    New-Item -ItemType Directory -Path $parent -Force -ErrorAction Stop | Out-Null
+    $temporary = Join-Path $parent ('.music-copy-' + [guid]::NewGuid().ToString('N') + [System.IO.Path]::GetExtension($destination))
+    try {
+        [System.IO.File]::Copy($Source,$temporary,$false)
+        if ((Get-FileHash -LiteralPath $temporary).Hash -ne $hash -or (Get-FileHash -LiteralPath $Source).Hash -ne $hash) { throw 'Copy verification failed or the source changed. Original retained.' }
+        Write-MusicTags $Executable $temporary $Tags $Reports
+        $tagged = (Get-FileHash -LiteralPath $temporary).Hash
+        if (Test-Path -LiteralPath $destination) {
+            if ((Get-FileHash -LiteralPath $destination).Hash -eq $tagged) { return $destination }
+            $stem = [System.IO.Path]::GetFileNameWithoutExtension($destination)
+            $extension = [System.IO.Path]::GetExtension($destination)
+            $destination = Assert-MusicPath (Join-Path $parent ($stem + ' (' + $hash.Substring(0,12).ToLowerInvariant() + ')' + $extension)) $Root
+            if (Test-Path -LiteralPath $destination) {
+                if ((Get-FileHash -LiteralPath $destination).Hash -eq $tagged) { return $destination }
+                throw 'A different file already occupies the collision-safe destination.'
+            }
+        }
+        [System.IO.File]::Move($temporary,$destination)
+        if ((Get-FileHash -LiteralPath $destination).Hash -ne $tagged) { throw 'Final file verification failed. Original retained.' }
+        $destination
+    } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -ErrorAction SilentlyContinue } }
 }
 
 function Save-MusicSource {
@@ -203,8 +378,10 @@ function Save-MusicSource {
     $tags = Read-MusicTags $Executable @($files | ForEach-Object {$_.path}) $Reports
     $saved = @()
     foreach ($file in $files) {
-        $destination = Get-MusicDestination $file.path $file.relative $tags[$file.path] $Config
-        $final = Copy-VerifiedMusic $file.path $destination $Config.musicRoot
+        $fill = Get-MusicNameTags $file.path $file.relative $tags[$file.path] $Config
+        $effective = Get-MusicNameTags $file.path $file.relative $tags[$file.path] $Config -Effective
+        $destination = Get-MusicDestination $file.path $file.relative $effective $Config
+        $final = Copy-VerifiedMusic $file.path $destination $Config.musicRoot $fill $Executable $Reports
         Add-MusicPending $Queue $final $Config.musicRoot
         $saved += $final
     }
@@ -237,7 +414,7 @@ function Save-MusicSource {
 }
 
 function Invoke-MusicLibraryImport {
-    param([string]$Executable,[string[]]$Paths,[string]$Root,[string]$Reports,[switch]$Analyze)
+    param([string]$Executable,[string[]]$Paths,[string]$Root,[string]$Reports,[switch]$Analyze,[string]$BpmRange,[switch]$Reanalyze)
     $arguments = ''
     foreach ($path in $Paths) {
         $full = Assert-MusicPath $path $Root
@@ -245,7 +422,11 @@ function Invoke-MusicLibraryImport {
         $arguments += '--import "' + $full + '" '
     }
     $report = Join-Path $Reports ([guid]::NewGuid().ToString('N') + '-import.json')
-    if ($Analyze) { $arguments += '--analyze ' }
+    if ($Analyze) {
+        $arguments += '--analyze '
+        if ($BpmRange) { $arguments += '--analyze-bpm ' + ($BpmRange -replace '\s','') + ' ' }
+        if ($Reanalyze) { $arguments += '--reanalyze ' }
+    }
     $arguments += '--import-report "' + $report + '"'
     if ($arguments.Length -gt 30000) { throw 'Import batch is too long.' }
     $process = Start-Process -FilePath $Executable -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
@@ -264,6 +445,29 @@ function Invoke-MusicLibraryImport {
     $result.report | Add-Member -NotePropertyName analysis -NotePropertyValue $analysis -PassThru
 }
 
+function Find-MusicMissing {
+    # rekordbox's Display All Missing Files and Auto Relocate, headless: lists
+    # tracks whose file is gone, searches the folders for the same file name,
+    # and with -Relocate points each track at its one clear match.
+    param([string]$Executable,[string[]]$Folders,[string]$Reports,[switch]$Relocate)
+    $folders = @($Folders | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) } | ForEach-Object { $_.TrimEnd('\') } | Select-Object -Unique)
+    if ($folders.Count -eq 0) { throw 'No folder to search is available.' }
+    $report = Join-Path $Reports ([guid]::NewGuid().ToString('N') + '-missing.json')
+    $arguments = ''
+    foreach ($folder in $folders) { $arguments += '--find-missing "' + $folder + '" ' }
+    if ($Relocate) { $arguments += '--relocate ' }
+    $arguments += '--missing-report "' + $report + '"'
+    $process = Start-Process -FilePath $Executable -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+    if (-not (Test-Path -LiteralPath $report)) { throw 'No missing-file report was produced.' }
+    $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($process.ExitCode -ne 0 -or $result.ok -ne $true) {
+        $message = 'The missing-file check failed.'
+        if ($result.PSObject.Properties['error']) { $message = $result.error }
+        throw "$message Report: $report"
+    }
+    $result
+}
+
 function Select-MusicFolder {
     param([string]$Description,[string]$Start)
     # Windows folder picker; returns $null when cancelled.
@@ -279,4 +483,4 @@ function Select-MusicFolder {
     } finally { $dialog.Dispose(); $owner.Dispose() }
 }
 
-Export-ModuleMember -Function Write-MusicJson, Read-MusicSettings, Assert-MusicPath, Get-MusicPending, Add-MusicPending, Get-MusicSources, Read-MusicTags, Get-MusicSegment, Get-MusicDestination, Copy-VerifiedMusic, Save-MusicSource, Invoke-MusicLibraryImport, Select-MusicFolder
+Export-ModuleMember -Function Write-MusicJson, Read-MusicSettings, Test-MusicBpmRange, Assert-MusicPattern, ConvertFrom-MusicPattern, Get-MusicArtistSpelling, Get-MusicNameTags, Write-MusicTags, Assert-MusicPath, Get-MusicPending, Add-MusicPending, Get-MusicSources, Read-MusicTags, Get-MusicSegment, Get-MusicDestination, Copy-VerifiedMusic, Save-MusicSource, Invoke-MusicLibraryImport, Find-MusicMissing, Select-MusicFolder

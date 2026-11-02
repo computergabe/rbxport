@@ -8,6 +8,15 @@
     [switch]$Recursive,
     [switch]$OrganizeOnly,
     [switch]$SkipAnalysis,
+    # Filename -> Tag: Mp3tag-style patterns tried in order, and the album for
+    # files no name or folder gives one.
+    [string[]]$FilenamePatterns,
+    [string]$DefaultAlbum,
+    # Preferred artist spellings, matched without regard to case.
+    [string[]]$ArtistNames,
+    # Analysis BPM range, min-max; tempos outside it are halved or doubled.
+    [string]$BpmRange,
+    [switch]$NoNameTags,
     [switch]$NonInteractive,
     [switch]$NoShortcut
 )
@@ -63,7 +72,17 @@ foreach ($source in $Sources) {
     if (($source.TrimEnd('\') + '\').StartsWith(($MusicRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw 'An inbox must be outside your permanent music folder.' }
 }
 foreach ($pending in @(Get-MusicPending (Join-Path $PSScriptRoot 'Music-Import.pending.json'))) { Assert-MusicPath $pending $MusicRoot | Out-Null }
-$config = [ordered]@{version=1;sources=@($Sources);musicRoot=$MusicRoot;recursive=[bool]$Recursive;layout=$Layout;originals=$Originals;artistFolder=$ArtistFolder;importToRekordbox=(-not [bool]$OrganizeOnly);analyze=(-not [bool]$SkipAnalysis)}
+$saved = $null
+if (Test-Path -LiteralPath $ConfigPath) { try { $saved = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch {} }
+if (-not $PSBoundParameters.ContainsKey('FilenamePatterns')) { $FilenamePatterns = if ($saved -and $saved.PSObject.Properties['filenamePatterns']) { @($saved.filenamePatterns) } else { @('%track%. %artist% - %title%','%artist% - %title%') } }
+if (-not $PSBoundParameters.ContainsKey('ArtistNames')) { $ArtistNames = if ($saved -and $saved.PSObject.Properties['artistNames']) { @($saved.artistNames) } else { @() } }
+$ArtistNames = @($ArtistNames | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if (-not $PSBoundParameters.ContainsKey('BpmRange')) { $BpmRange = if ($saved -and $saved.PSObject.Properties['bpmRange']) { [string]$saved.bpmRange } else { '70-180' } }
+if (-not (Test-MusicBpmRange $BpmRange)) { throw 'Use a BPM range between 40 and 300, such as 90-180.' }
+if (-not $PSBoundParameters.ContainsKey('DefaultAlbum')) { $DefaultAlbum = if ($saved -and $saved.PSObject.Properties['defaultAlbum']) { [string]$saved.defaultAlbum } else { 'Dub Plates' } }
+$FilenamePatterns = @($FilenamePatterns | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+foreach ($pattern in $FilenamePatterns) { Assert-MusicPattern $pattern }
+$config = [ordered]@{version=1;sources=@($Sources);musicRoot=$MusicRoot;recursive=[bool]$Recursive;layout=$Layout;originals=$Originals;artistFolder=$ArtistFolder;importToRekordbox=(-not [bool]$OrganizeOnly);analyze=(-not [bool]$SkipAnalysis);tagFromNames=(-not [bool]$NoNameTags);filenamePatterns=@($FilenamePatterns);defaultAlbum=$DefaultAlbum.Trim();artistNames=@($ArtistNames);bpmRange=($BpmRange -replace '\s','')}
 Write-Host ('Music library folder: ' + $MusicRoot)
 Write-Host ('Sources: ' + ($Sources -join ', '))
 Write-Host ("Layout: $Layout; originals: $Originals; library import: " + $config.importToRekordbox + '; analyze: ' + $config.analyze)

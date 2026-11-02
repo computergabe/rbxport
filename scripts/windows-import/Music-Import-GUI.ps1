@@ -59,20 +59,30 @@ $browseLibrary = New-Button 'Change...'
 Add-Row 'Music library folder' $library $browseLibrary
 $layout = New-Combo $layouts; Add-Row 'Arrange files as' $layout $null
 $artist = New-Combo $artists; Add-Row 'Artist folder from' $artist $null
+$nameTags = New-Object System.Windows.Forms.CheckBox -Property @{Text='Fill missing tags from file and folder names'; AutoSize=$true; Checked=$true; Margin=(New-Object System.Windows.Forms.Padding(0,4,0,0))}
+Add-Row '' $nameTags $null
+$patterns = New-Object System.Windows.Forms.TextBox -Property @{Dock='Fill'; Text='%track%. %artist% - %title%; %artist% - %title%'}
+Add-Row 'Filename patterns' $patterns $null
+$defaultAlbum = New-Object System.Windows.Forms.TextBox -Property @{Dock='Fill'; Text='Dub Plates'}
+Add-Row 'Album when none' $defaultAlbum $null
+$artistNames = New-Object System.Windows.Forms.TextBox -Property @{Dock='Fill'}
+Add-Row 'Artist spellings' $artistNames $null
 $original = New-Combo $originals; Add-Row 'Downloads' $original $null
 $options = New-Object System.Windows.Forms.FlowLayoutPanel -Property @{AutoSize=$true; Dock='Fill'; Margin=(New-Object System.Windows.Forms.Padding(0))}
 $recursive = New-Object System.Windows.Forms.CheckBox -Property @{Text='Include inbox subfolders'; AutoSize=$true}
 $register = New-Object System.Windows.Forms.CheckBox -Property @{Text='Add tracks to the rekordbox library'; AutoSize=$true; Checked=$true}
-$analyze = New-Object System.Windows.Forms.CheckBox -Property @{Text='Analyze them (RBXport Electronic Music)'; AutoSize=$true; Checked=$true}
-$options.Controls.AddRange(@($recursive, $register, $analyze))
+$analyze = New-Object System.Windows.Forms.CheckBox -Property @{Text='Analyze them (RBXport Electronic Music), BPM'; AutoSize=$true; Checked=$true}
+$bpmRange = New-Object System.Windows.Forms.TextBox -Property @{Text='70-180'; Width=70; Margin=(New-Object System.Windows.Forms.Padding(0,1,0,0))}
+$options.Controls.AddRange(@($recursive, $register, $analyze, $bpmRange))
 Add-Row '' $options $null
 
 $actions = New-Object System.Windows.Forms.FlowLayoutPanel -Property @{AutoSize=$true; Dock='Fill'; Margin=(New-Object System.Windows.Forms.Padding(0,10,0,6))}
 $importInbox = New-Object System.Windows.Forms.Button -Property @{Text='Import from inbox'; AutoSize=$true; Font=(New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)); Padding=(New-Object System.Windows.Forms.Padding(8,2,8,2))}
 $importFolder = New-Object System.Windows.Forms.Button -Property @{Text='Import a folder...'; AutoSize=$true; Padding=(New-Object System.Windows.Forms.Padding(8,2,8,2))}
+$fixMissing = New-Object System.Windows.Forms.Button -Property @{Text='Fix missing files'; AutoSize=$true; Padding=(New-Object System.Windows.Forms.Padding(8,2,8,2))}
 $openLibrary = New-Object System.Windows.Forms.LinkLabel -Property @{Text='Open music library folder'; AutoSize=$true; Margin=(New-Object System.Windows.Forms.Padding(16,9,0,0))}
 $openReports = New-Object System.Windows.Forms.LinkLabel -Property @{Text='Reports'; AutoSize=$true; Margin=(New-Object System.Windows.Forms.Padding(12,9,0,0))}
-$actions.Controls.AddRange(@($importInbox, $importFolder, $openLibrary, $openReports))
+$actions.Controls.AddRange(@($importInbox, $importFolder, $fixMissing, $openLibrary, $openReports))
 Add-Row '' $actions $null
 $progress = New-Object System.Windows.Forms.ProgressBar -Property @{Dock='Fill'; Style='Marquee'; MarqueeAnimationSpeed=0; Height=6}
 Add-Row '' $progress $null
@@ -81,7 +91,7 @@ Add-Row '' $output $null '100'
 $status = New-Object System.Windows.Forms.Label -Property @{AutoSize=$true; Dock='Fill'; Font=(New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)); Margin=(New-Object System.Windows.Forms.Padding(0,6,0,0))}
 Add-Row '' $status $null
 
-$settingControls = @($inboxes, $addInbox, $removeInbox, $browseLibrary, $layout, $artist, $original, $recursive, $register, $analyze, $importInbox, $importFolder)
+$settingControls = @($inboxes, $addInbox, $removeInbox, $browseLibrary, $layout, $artist, $nameTags, $patterns, $defaultAlbum, $artistNames, $bpmRange, $original, $recursive, $register, $analyze, $importInbox, $importFolder, $fixMissing)
 function Set-Status([string]$Text, [string]$Color = 'ControlText') { $status.Text = $Text; $status.ForeColor = [System.Drawing.Color]::FromName($Color) }
 
 # Load saved settings; a first run starts from defaults and saves on the first import.
@@ -97,6 +107,11 @@ if ($firstRun) {
         Set-Combo $layout $layouts $saved.layout; Set-Combo $artist $artists $saved.artistFolder; Set-Combo $original $originals $saved.originals
         $recursive.Checked = [bool]$saved.recursive; $register.Checked = [bool]$saved.importToRekordbox
         $analyze.Checked = -not ($saved.PSObject.Properties['analyze'] -and -not $saved.analyze)
+        $nameTags.Checked = -not ($saved.PSObject.Properties['tagFromNames'] -and -not $saved.tagFromNames)
+        if ($saved.PSObject.Properties['filenamePatterns']) { $patterns.Text = @($saved.filenamePatterns) -join '; ' }
+        if ($saved.PSObject.Properties['defaultAlbum']) { $defaultAlbum.Text = [string]$saved.defaultAlbum }
+        if ($saved.PSObject.Properties['artistNames']) { $artistNames.Text = @($saved.artistNames) -join '; ' }
+        if ($saved.PSObject.Properties['bpmRange']) { $bpmRange.Text = [string]$saved.bpmRange }
         Set-Status 'Ready. Close rekordbox before importing.'
     } catch { Set-Status ('Saved settings could not be read: ' + $_.Exception.Message) 'Firebrick' }
 }
@@ -107,6 +122,7 @@ function Save-Settings {
         ConfigPath=$ConfigPath; Sources=@($inboxes.Items | ForEach-Object {[string]$_}); MusicRoot=$library.Text
         Layout=(Get-Combo $layout $layouts); Originals=(Get-Combo $original $originals); ArtistFolder=(Get-Combo $artist $artists)
         Recursive=$recursive.Checked; OrganizeOnly=(-not $register.Checked); SkipAnalysis=(-not $analyze.Checked); NonInteractive=$true; NoShortcut=$true
+        NoNameTags=(-not $nameTags.Checked); FilenamePatterns=@($patterns.Text -split ';'); DefaultAlbum=$defaultAlbum.Text; ArtistNames=@($artistNames.Text -split ';'); BpmRange=$bpmRange.Text
     }
     & (Join-Path $PSScriptRoot 'Setup-Music-Import.ps1') @arguments *> $null
     $script:dirty = $false
@@ -117,10 +133,13 @@ function Save-Settings {
 }
 $markDirty = { $script:dirty = $true }
 foreach ($combo in @($layout, $artist, $original)) { $combo.add_SelectedIndexChanged($markDirty) }
-foreach ($box in @($recursive, $register, $analyze)) { $box.add_CheckedChanged($markDirty) }
+foreach ($box in @($recursive, $register, $analyze, $nameTags)) { $box.add_CheckedChanged($markDirty) }
+foreach ($box in @($patterns, $defaultAlbum, $artistNames, $bpmRange)) { $box.add_TextChanged($markDirty) }
+$nameTags.add_CheckedChanged({ foreach ($box in @($patterns, $defaultAlbum, $artistNames)) { $box.Enabled = $nameTags.Checked } })
 # Analysis happens while registering, so it needs the library import.
-$register.add_CheckedChanged({ $analyze.Visible = $register.Checked })
-$analyze.Visible = $register.Checked
+$register.add_CheckedChanged({ $analyze.Visible = $register.Checked; $bpmRange.Visible = $register.Checked })
+$analyze.add_CheckedChanged({ $bpmRange.Enabled = $analyze.Checked })
+$analyze.Visible = $register.Checked; $bpmRange.Visible = $register.Checked
 
 $addInbox.add_Click({
     $start = if ($inboxes.Items.Count) { [string]$inboxes.Items[0] } else { Join-Path $env:USERPROFILE 'Downloads' }
@@ -138,15 +157,16 @@ $openReports.add_LinkClicked({
     if (Test-Path -LiteralPath $reports -PathType Container) { Start-Process explorer.exe -ArgumentList ('"' + $reports + '"') }
 })
 
-function Start-Import([string]$Source) {
+function Start-Import([string]$Source, [switch]$CheckMissing) {
     if ($inboxes.Items.Count -eq 0) { Show-Problem 'Add at least one inbox folder first.'; return }
-    if ($register.Checked -and (Get-Process | Where-Object { $_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$' })) {
-        Show-Problem 'Close rekordbox, its tray agent, and RBXPORT first, then import again.'; return
+    if (($register.Checked -or $CheckMissing) -and (Get-Process | Where-Object { $_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$' })) {
+        Show-Problem 'Close rekordbox, its tray agent, and RBXPORT first, then try again.'; return
     }
     try { if ($script:dirty -or $script:firstRun) { Save-Settings } } catch { Show-Problem ('Settings were not saved: ' + $_.Exception.Message); return }
     $quote = { "'" + ([string]$args[0]).Replace("'", "''") + "'" }
     $command = '[Console]::OutputEncoding=[Text.Encoding]::UTF8; & ' + (& $quote $launcher) + ' -NoPause -ConfigPath ' + (& $quote $ConfigPath) + ' -Executable ' + (& $quote $Executable)
     if ($Source) { $command += ' -Source ' + (& $quote $Source) }
+    if ($CheckMissing) { $command += ' -CheckMissing' }
     $command += '; exit $LASTEXITCODE'
     $out = [System.IO.Path]::GetTempFileName(); $err = [System.IO.Path]::GetTempFileName()
     $process = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ('"' + $command + '"')) -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
@@ -156,7 +176,8 @@ function Start-Import([string]$Source) {
     $output.Clear()
     foreach ($control in $settingControls) { $control.Enabled = $false }
     $progress.MarqueeAnimationSpeed = 30
-    Set-Status 'Importing...'
+    Set-Status $(if ($CheckMissing) { 'Looking for missing files...' } else { 'Importing...' })
+    $script:checking = [bool]$CheckMissing
     $timer.Start()
 }
 # The child writes bare LF line endings; the text box needs CRLF.
@@ -175,7 +196,11 @@ function Complete-Import {
     $script:run = $null
     $progress.MarqueeAnimationSpeed = 0
     foreach ($control in $settingControls) { $control.Enabled = $true }
-    if ($run.process.ExitCode -ne 0) { Set-Status 'Finished, but some items need attention. See the messages above.' 'DarkOrange' }
+    if ($script:checking) {
+        if ($run.process.ExitCode -eq 0) { Set-Status 'Done. No files are missing now.' 'ForestGreen' }
+        else { Set-Status 'Some files are still missing. See the messages above.' 'DarkOrange' }
+    }
+    elseif ($run.process.ExitCode -ne 0) { Set-Status 'Finished, but some items need attention. See the messages above.' 'DarkOrange' }
     elseif ($register.Checked) { Set-Status 'Finished. Open rekordbox to see the new tracks.' 'ForestGreen' }
     else { Set-Status 'Finished. Music is organized in your library folder.' 'ForestGreen' }
 }
@@ -187,6 +212,7 @@ $timer.add_Tick({
     if ($exited) { $timer.Stop(); Complete-Import }
 })
 $importInbox.add_Click({ Start-Import $null })
+$fixMissing.add_Click({ Start-Import $null -CheckMissing })
 $importFolder.add_Click({
     $start = if ($inboxes.Items.Count) { [string]$inboxes.Items[0] } else { Join-Path $env:USERPROFILE 'Downloads' }
     $path = Select-MusicFolder 'Choose a folder with ZIP or audio files to import into rekordbox.' $start

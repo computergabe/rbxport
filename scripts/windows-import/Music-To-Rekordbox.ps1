@@ -4,6 +4,8 @@
     # Import from this folder or file once instead of the saved inboxes.
     [string]$Source,
     [switch]$PickFolder,
+    # Find tracks whose file is gone and relocate them, instead of importing.
+    [switch]$CheckMissing,
     [switch]$NoPause
 )
 $ErrorActionPreference = 'Stop'
@@ -26,16 +28,18 @@ try {
         & (Join-Path $PSScriptRoot 'Setup-Music-Import.ps1') -ConfigPath $ConfigPath
     }
     $config = Read-MusicSettings $ConfigPath
-    if (-not $Source -and -not $PickFolder -and -not $NoPause) {
+    if (-not $Source -and -not $PickFolder -and -not $CheckMissing -and -not $NoPause) {
         Write-Host ''
         Write-Host '  MUSIC  ->  REKORDBOX' -ForegroundColor Cyan
         Write-Host ('  Saved inbox: ' + (@($config.sources) -join ', '))
         Write-Host ''
         Write-Host '  [Enter]  Import from the saved inbox'
         Write-Host '  [F]      Pick a folder to import this time'
+        Write-Host '  [M]      Find and fix missing files'
         Write-Host '  [S]      Change settings (inbox, music library folder, layout)'
         $choice = ([string](Read-Host '  Choose')).Trim()
         if ($choice -match '^f') { $PickFolder = $true }
+        elseif ($choice -match '^m') { $CheckMissing = $true }
         elseif ($choice -match '^s') {
             & (Join-Path $PSScriptRoot 'Setup-Music-Import.ps1') -ConfigPath $ConfigPath -NoShortcut
             $config = Read-MusicSettings $ConfigPath
@@ -52,6 +56,32 @@ try {
         $config.sources = @($Source)
     }
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw 'The universal RBXPORT app is missing.' }
+    if ($CheckMissing) {
+        New-Item -ItemType Directory -Path $reports -Force | Out-Null
+        $folders = @($config.musicRoot) + @(@($config.sources) | ForEach-Object { if (Test-Path -LiteralPath $_ -PathType Leaf) { Split-Path -Parent $_ } else { $_ } })
+        $open = [bool](Get-Process | Where-Object { $_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$' })
+        Write-Host ''
+        Write-Host '  MISSING FILES' -ForegroundColor Cyan
+        Log ('  Searching: ' + ($folders -join ', '))
+        if ($open) { Log '  rekordbox or RBXPORT is open, so this lists missing files without relocating them.' }
+        $result = Find-MusicMissing $Executable $folders $reports -Relocate:(-not $open)
+        foreach ($track in @($result.tracks)) {
+            if ($track.PSObject.Properties['relocatedTo']) { Log ('  Relocated: ' + $track.title + ' -> ' + $track.relocatedTo) }
+            elseif ($track.PSObject.Properties['error']) { $failed = $true; Log ('  Could not relocate ' + $track.title + ': ' + $track.error) }
+            elseif (@($track.candidates).Count -gt 1) { Log ('  Several files could be ' + $track.title + ': ' + (@($track.candidates) -join ' | ')) }
+            elseif (@($track.candidates).Count -eq 1) { Log ('  Found ' + $track.title + ' at ' + @($track.candidates)[0] + ' (close rekordbox to relocate)') }
+            else { Log ('  Not found: ' + $track.title + ' (' + $track.path + ')') }
+        }
+        $left = [int]$result.missing - [int]$result.relocated
+        Write-Host ''
+        if ([int]$result.missing -eq 0) { Write-Host '  NO MISSING FILES' -ForegroundColor Green }
+        elseif ($left -eq 0) { Write-Host '  ALL MISSING FILES RELOCATED' -ForegroundColor Green }
+        else { Write-Host '  SOME FILES ARE STILL MISSING' -ForegroundColor Yellow }
+        Log ("  Missing: $($result.missing)   Relocated: $($result.relocated)   Still missing: $left")
+        if ($left -gt 0) { $failed = $true }
+        # Exit here, past the import below; finally still releases the lock.
+        exit [int]$failed
+    }
     if ($config.importToRekordbox -and (Get-Process | Where-Object { $_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$' })) {
         throw 'Close rekordbox, its tray agent, and other RBXPORT instances before moving or importing music.'
     }
@@ -86,7 +116,7 @@ try {
             try {
                 if ($config.analyze) { Log ('  Registering and analyzing ' + $batch.Count + ' track(s) in the current rekordbox library. Analysis takes a few seconds per track...') }
                 else { Log ('  Registering ' + $batch.Count + ' track(s) in the current rekordbox library...') }
-                $report = Invoke-MusicLibraryImport $Executable $batch $config.musicRoot $reports -Analyze:$config.analyze
+                $report = Invoke-MusicLibraryImport $Executable $batch $config.musicRoot $reports -Analyze:$config.analyze -BpmRange $config.bpmRange
                 $added += [int]$report.imported; $existing += @($report.existing).Count
                 foreach ($item in @($report.analysis)) {
                     if ($item.ok) { $analysed++ } else { $unanalysed++; Log ('  Not analyzed: ' + $item.title + ' - ' + $item.error) }

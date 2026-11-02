@@ -62,9 +62,48 @@ seconds per track. rekordbox 7 keeps that analysis: it does not ask to analyze
 the track again, and Beat Sync works. A track that cannot be analyzed is still
 imported and is listed in the output; analyze it in rekordbox or RBXPORT.
 
+### Tags from file and folder names
+
+Downloads often arrive untagged, so every track would land in `Unknown
+Artist\Unknown Album`. With **Fill missing tags from file and folder names**
+ticked, the importer reads the missing tags from the names, Mp3tag-style, and
+writes them into the copy in your music library folder before it is sorted
+and registered. The original download is never changed, and a tag the file
+already has is never replaced.
+
+- **Filename patterns**, tried in order and separated by `;`. The defaults are
+  `%track%. %artist% - %title%` and `%artist% - %title%`. Fields are
+  `%artist%`, `%title%`, `%album%`, `%albumartist%`, `%track%`, `%year%` and
+  `%dummy%` (matched and ignored). A dash missing the space on one side, as in
+  `immix- back 2 basics`, still matches.
+- **Album folders**: a file inside a folder gets that folder as its album.
+  `Artist - Album (2026)` gives the album, the album artist and the year;
+  `Artist - Album` gives the album and album artist; any other name is the album.
+- **Album when none**: the album for files with no album tag, pattern or
+  folder, such as loose files at the top of a ZIP (default `Dub Plates`).
+
+- **Artist spellings**, separated by `;`, such as `IMMIX`. An artist from a
+  tag or a name that matches one, in any capitalization, takes that spelling,
+  so rekordbox lists one artist. A file whose name fits no pattern but names
+  a listed artist as a separate word gets that artist.
+
+A file whose name matches no pattern keeps its file name as its title.
+
 Settings changed in the window are saved when you import or close it. **Import a
 folder...** never changes the saved inboxes; the folder must be outside your
 music library folder.
+
+### Missing files
+
+**Fix missing files** does what rekordbox's **File → Display All Missing
+Files** and **Auto Relocate** do, in one step. It lists every track whose
+file no longer exists at the path rekordbox has, searches your music library
+folder and inbox folders for a file with the same name, and points the track
+at it when there is one clear match (one file of that name, or the one whose
+size matches what rekordbox recorded). Tracks with several possible matches
+or none are listed for you to relocate in rekordbox. Close rekordbox first;
+while it is open, the check only lists what it finds. From PowerShell, run
+`Music-To-Rekordbox.ps1 -CheckMissing`.
 
 ### Console launcher
 
@@ -74,6 +113,7 @@ music library folder.
 | --- | --- |
 | Enter | Import from your saved inbox folders. |
 | F | Pick any folder in a Windows folder picker and import from it this time only. Saved settings are unchanged. |
+| M | Find tracks whose files are missing and relocate them (see Missing files). |
 | S | Rerun the console setup (`Setup-Music-Import.ps1`) to change inboxes, the music library folder, layout, or other preferences. |
 
 From PowerShell, `-Source 'D:\Some Folder'` or `-PickFolder` imports from one
@@ -92,6 +132,8 @@ The settings are:
 | Originals | Copy keeps downloads (default). Move removes a ZIP or standalone audio file only after verification and queue persistence. |
 | Artist folders | Prefer Album Artist with Track Artist fallback (default), or always use Track Artist. |
 | Library import | Register the organized files in rekordbox, or organize only and retain them in the pending queue. |
+| Tags from names | Fill tags a file is missing from its file name and folder name, like Mp3tag's Filename → Tag (default on). See below. |
+| BPM range | The analysis tempo range, `min-max` (default `70-180`). A tempo outside it is halved or doubled into it: with `90-180`, a 175 BPM track that reads as 87.5 is recorded as 175. |
 | Analyze | Analyze newly registered tracks with the RBXport (Electronic Music) preset while importing (default on). Re-importing a registered track that was never analyzed, or was analyzed by RBXPORT before 1.3.0, analyzes it again. |
 
 Sources must be outside the permanent storage folder. Use finished downloads.
