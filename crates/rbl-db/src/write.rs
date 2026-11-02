@@ -1096,11 +1096,20 @@ impl Writer {
     pub fn track_id_at(&self, path: &Path) -> Result<Option<String>> {
         let path = normalized(path);
         let folder = path.to_string_lossy().into_owned();
+        // Windows paths ignore case: `IMMIX\a.wav` and `immix\a.wav` are one
+        // file, and matching them exactly registered it twice. NOCASE folds
+        // ASCII only, which covers the drive letters and folder names that
+        // differ in practice.
+        let sql = if cfg!(windows) {
+            "SELECT ID FROM djmdContent WHERE FolderPath = ?1 COLLATE NOCASE AND rb_local_deleted = 0 ORDER BY ID LIMIT 1"
+        } else {
+            "SELECT ID FROM djmdContent WHERE FolderPath = ?1 AND rb_local_deleted = 0 ORDER BY ID LIMIT 1"
+        };
         let id = self
             .library
             .connection()
             .query_row(
-                "SELECT ID FROM djmdContent WHERE FolderPath = ?1 AND rb_local_deleted = 0 ORDER BY ID LIMIT 1",
+                sql,
                 params![folder],
                 |r| r.get::<_, String>(0),
             )

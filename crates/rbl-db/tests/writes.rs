@@ -1366,8 +1366,13 @@ fn an_imported_file_is_found_again_by_its_path() {
     let mut f = fixture();
     assert_eq!(f.writer.track_id_at(&path).unwrap(), None);
     let id = f.writer.import_file(&path).unwrap();
-    assert_eq!(f.writer.track_id_at(&path).unwrap(), Some(id));
+    assert_eq!(f.writer.track_id_at(&path).unwrap(), Some(id.clone()));
     assert_eq!(f.writer.track_id_at(&other).unwrap(), None);
+    // Another spelling of the same Windows path is the same file.
+    if cfg!(windows) {
+        let shouted = std::path::PathBuf::from(path.to_string_lossy().to_uppercase());
+        assert_eq!(f.writer.track_id_at(&shouted).unwrap(), Some(id));
+    }
 }
 
 #[test]
