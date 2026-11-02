@@ -11,6 +11,7 @@ mod file_drag;
 mod startup;
 mod import_cli;
 mod music_inspect;
+mod music_tag;
 mod screen_cache;
 mod sentry;
 pub mod analysis;
@@ -62,6 +63,12 @@ pub fn run_elevated_update_helper_if_requested() -> Option<i32> {
 /// Reads audio metadata for inbox scripts without opening a rekordbox library.
 pub fn run_music_inspect_if_requested() -> Option<i32> {
     music_inspect::run_if_requested()
+}
+
+/// Writes tags derived from file and folder names for inbox scripts, without
+/// opening a rekordbox library.
+pub fn run_music_tag_if_requested() -> Option<i32> {
+    music_tag::run_if_requested()
 }
 
 use state::AppState;

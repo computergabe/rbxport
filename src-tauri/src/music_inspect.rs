@@ -9,7 +9,7 @@ fn inspect(paths: &[String]) -> serde_json::Value {
         match rbl_db::import::read_tags(Path::new(path)) {
             Ok(tags) => files.push(serde_json::json!({
                 "path": path, "artist": tags.artist, "albumArtist": tags.album_artist, "album": tags.album,
-                "title": tags.title, "trackNumber": tags.track_no,
+                "title": tags.title, "trackNumber": tags.track_no, "year": tags.year,
             })),
             Err(error) => errors.push(serde_json::json!({"path": path, "error": error.to_string()})),
         }

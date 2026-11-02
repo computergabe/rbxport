@@ -5,6 +5,9 @@ fn main() {
     if let Some(code) = rbxport_lib::run_music_inspect_if_requested() {
         std::process::exit(code);
     }
+    if let Some(code) = rbxport_lib::run_music_tag_if_requested() {
+        std::process::exit(code);
+    }
     if let Some(code) = rbxport_lib::run_elevated_update_helper_if_requested() {
         std::process::exit(code);
     }

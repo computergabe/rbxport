@@ -141,15 +141,18 @@ pub async fn analyse_track<R: tauri::Runtime>(
 }
 
 /// What the headless import runs for each track it analyses: the RBXport
-/// (Electronic Music) preset with the Analysis Setting dialog's defaults.
+/// (Electronic Music) preset with the Analysis Setting dialog's defaults and
+/// the given BPM range, which decides between half and double time.
 pub fn analyse_imported(
     state: &AppState,
     library: &rbl_index::Library,
     track_id: &str,
     editor: &crate::grid::GridEditor,
+    bpm: (u16, u16),
 ) -> AppResult<AnalysisResultDto> {
     let share = state.share_root();
-    analyse_and_save(state, library, &share, track_id, rbl_analysis::AnalysisPreset::Rbxport, &AnalysisSettings::default(), editor)
+    let settings = AnalysisSettings { min_bpm: f64::from(bpm.0), max_bpm: f64::from(bpm.1), ..AnalysisSettings::default() };
+    analyse_and_save(state, library, &share, track_id, rbl_analysis::AnalysisPreset::Rbxport, &settings, editor)
 }
 
 /// The whole job, apart from the event: what the command runs on a worker

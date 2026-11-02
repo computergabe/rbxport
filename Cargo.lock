@@ -4147,6 +4147,7 @@ dependencies = [
  "dirs 5.0.1",
  "drag",
  "libc",
+ "lofty",
  "midir",
  "minisign-verify",
  "objc2",
