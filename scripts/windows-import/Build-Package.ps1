@@ -15,7 +15,7 @@ New-Item -ItemType Directory -Path $output -Force | Out-Null
 $appFolder = Join-Path $output 'RBXPORT-Music'
 New-Item -ItemType Directory -Path $appFolder | Out-Null
 Copy-Item -LiteralPath $Executable -Destination (Join-Path $appFolder 'rbxport.exe')
-foreach ($name in @('Music-To-Rekordbox.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1','START-HERE.txt')) {
+foreach ($name in @('Music-To-Rekordbox.ps1','Music-Import-GUI.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1','START-HERE.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $output
 }
 Copy-Item -LiteralPath (Join-Path $repo 'src-tauri\icons\icon.ico') -Destination (Join-Path $output 'Music-Rekordbox.ico')

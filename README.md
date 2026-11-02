@@ -29,15 +29,15 @@ or [read the setup and PowerShell guide](docs/user/windows-import.md).
 3. Open PowerShell in the extracted folder and run:
 
    ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Music-Import-GUI.ps1
    ```
 
-4. Choose your source folders or individual files, **WHERE SONGS LIVE** storage
-   folder, layout, Copy or Move policy, and library-import preference.
+4. In the window, choose your inbox folders, **music library folder**, layout,
+   Copy or Move policy, and library-import preference, then import.
 5. Close rekordbox and its tray agent, then click **Music → Rekordbox**.
    Reopen rekordbox after it finishes.
 
-The setup creates the button and saves your preferences for later clicks.
+The first import creates the button and saves your preferences for later clicks.
 Downloads need no compiler tools. The release includes scripts, the app, an
 icon, licenses, checksums, and corresponding source.
 
@@ -45,7 +45,7 @@ icon, licenses, checksums, and corresponding source.
 
 Select multiple inboxes, include subfolders if desired, and choose music
 storage on an available local/external drive or accessible network share.
-The storage folder can have any name; “WHERE SONGS LIVE” is the setup label.
+The music library folder can have any name.
 
 - **Artist/Album/Filename:** reads embedded tags; prefers Album Artist with
   Track Artist fallback. Missing tags use Unknown Artist/Unknown Album.

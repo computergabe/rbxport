@@ -45,33 +45,42 @@ explains the requirement. Build tools are only needed to compile from source.
 3. Open PowerShell in the extracted folder and run:
 
    ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Music-Import-GUI.ps1
    ```
 
-4. Answer the setup prompts, review the settings, and save them. At each folder
-   question, press Enter to open a folder picker or paste a full path. Setup creates
+4. In the window, add an inbox folder, choose your music library folder, and
+   pick the other options. Your first import saves the settings and creates
    **Music → Rekordbox** on your actual desktop, including a redirected desktop.
 5. Finish downloading your music, close rekordbox and its tray agent plus other
-   RBXPORT instances, and click the button. Choose an option, read the result,
-   press Enter to close, and reopen rekordbox.
+   RBXPORT instances, and click the button. Click **Import from inbox**, or
+   **Import a folder...** to import any other folder once. Progress appears in
+   the window. Reopen rekordbox when it says Finished.
 
-The button opens with a short menu:
+Settings changed in the window are saved when you import or close it. **Import a
+folder...** never changes the saved inboxes; the folder must be outside your
+music library folder.
+
+### Console launcher
+
+`Music-To-Rekordbox.ps1` still works without the window. It opens a short menu:
 
 | Key | What happens |
 | --- | --- |
 | Enter | Import from your saved inbox folders. |
 | F | Pick any folder in a Windows folder picker and import from it this time only. Saved settings are unchanged. |
-| S | Rerun setup to change inboxes, WHERE SONGS LIVE, layout, or other preferences. |
+| S | Rerun the console setup (`Setup-Music-Import.ps1`) to change inboxes, the music library folder, layout, or other preferences. |
 
 From PowerShell, `-Source 'D:\Some Folder'` or `-PickFolder` imports from one
-folder or file without the menu. The picked source must be outside WHERE SONGS LIVE.
+folder or file without the menu. The picked source must be outside the music library folder.
+Buttons made by version 1.2.2 or earlier open this console launcher; to switch an
+existing button to the window, run `.\Create-Desktop-Shortcut.ps1 -Replace`.
 
-The setup asks for:
+The settings are:
 
 | Choice | What it controls |
 | --- | --- |
 | Sources | One or more full inbox folder paths, or individual ZIP/audio file paths. Downloads, custom folders, external drives, and accessible network shares can be selected. |
-| WHERE SONGS LIVE | Your permanent music storage folder. This label describes any folder you choose; it does not require that literal folder name. |
+| Music library folder | Where your music is kept permanently and where rekordbox plays it from. Any folder name works. |
 | Subfolders | Whether to scan nested inbox folders. The default is no. |
 | Layout | Artist/Album/Filename, preserve source folders, or put files directly in the storage root. |
 | Originals | Copy keeps downloads (default). Move removes a ZIP or standalone audio file only after verification and queue persistence. |

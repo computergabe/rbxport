@@ -33,7 +33,7 @@ try {
         Write-Host ''
         Write-Host '  [Enter]  Import from the saved inbox'
         Write-Host '  [F]      Pick a folder to import this time'
-        Write-Host '  [S]      Change settings (inbox, WHERE SONGS LIVE, layout)'
+        Write-Host '  [S]      Change settings (inbox, music library folder, layout)'
         $choice = ([string](Read-Host '  Choose')).Trim()
         if ($choice -match '^f') { $PickFolder = $true }
         elseif ($choice -match '^s') {
@@ -48,7 +48,7 @@ try {
     if ($Source) {
         if (-not [System.IO.Path]::IsPathRooted($Source) -or -not (Test-Path -LiteralPath $Source)) { throw "Source is unavailable: $Source" }
         $Source = [System.IO.Path]::GetFullPath($Source)
-        if (($Source.TrimEnd('\') + '\').StartsWith(($config.musicRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw 'Pick a folder outside WHERE SONGS LIVE.' }
+        if (($Source.TrimEnd('\') + '\').StartsWith(($config.musicRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw 'Pick a folder outside your music library folder.' }
         $config.sources = @($Source)
     }
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw 'The universal RBXPORT app is missing.' }
@@ -62,7 +62,7 @@ try {
     Clear-Host
     Write-Host ''
     Write-Host '  MUSIC  ->  REKORDBOX' -ForegroundColor Cyan
-    Log ('  WHERE SONGS LIVE: ' + $config.musicRoot)
+    Log ('  Music library folder: ' + $config.musicRoot)
     Log ('  Layout: ' + $config.layout + '   Originals: ' + $config.originals)
     $sources = @(Get-MusicSources $config $PSScriptRoot)
     $prepared = 0; $sourceErrors = 0
@@ -74,7 +74,7 @@ try {
             Log ('  Verified ' + $result.tracks + ' track(s); original policy: ' + $result.originals)
         } catch { $sourceErrors++; $failed=$true; Log ('  Source needs attention: ' + $_.Exception.Message) }
     }
-    $added = 0; $existing = 0
+    $added = 0; $existing = 0; $analysed = 0; $unanalysed = 0
     if ($config.importToRekordbox) {
         $pending = @(Get-MusicPending $queue)
         while ($pending.Count -gt 0) {
@@ -84,9 +84,13 @@ try {
                 $batch += $path; $length += $path.Length + 15
             }
             try {
-                Log ('  Registering ' + $batch.Count + ' track(s) in the current rekordbox library...')
-                $report = Invoke-MusicLibraryImport $Executable $batch $config.musicRoot $reports
+                if ($config.analyze) { Log ('  Registering and analyzing ' + $batch.Count + ' track(s) in the current rekordbox library. Analysis takes a few seconds per track...') }
+                else { Log ('  Registering ' + $batch.Count + ' track(s) in the current rekordbox library...') }
+                $report = Invoke-MusicLibraryImport $Executable $batch $config.musicRoot $reports -Analyze:$config.analyze
                 $added += [int]$report.imported; $existing += @($report.existing).Count
+                foreach ($item in @($report.analysis)) {
+                    if ($item.ok) { $analysed++ } else { $unanalysed++; Log ('  Not analyzed: ' + $item.title + ' - ' + $item.error) }
+                }
                 $pending = @($pending | Where-Object { $batch -notcontains $_ })
                 Write-MusicJson $queue @{version=1;files=@($pending)}
             } catch { $failed=$true; Log ('  Library import needs attention: ' + $_.Exception.Message); break }
@@ -99,6 +103,8 @@ try {
     else { Write-Host '  FINISHED - MUSIC IS READY IN REKORDBOX' -ForegroundColor Green }
     Log ("  Tracks prepared: $prepared   Source errors: $sourceErrors")
     Log ("  Library tracks added: $added   Already registered: $existing   Queued: $left")
+    if ($config.importToRekordbox -and $config.analyze) { Log ("  Tracks analyzed (RBXport Electronic Music): $analysed   Not analyzed: $unanalysed") }
+    if ($unanalysed -gt 0) { Write-Host '  Unanalyzed tracks are in rekordbox; analyze them there or in RBXPORT.' -ForegroundColor Yellow }
     Log ('  Reports: ' + $reports)
     if ($left -gt 0) { Write-Host '  Music is safely stored. Enable import or resolve the message above, then run again.' -ForegroundColor Yellow }
 } catch { $failed=$true; Write-Host $_.Exception.Message -ForegroundColor Yellow }

@@ -16,7 +16,9 @@ function Read-MusicSettings {
     param([string]$Path)
     $config = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     if ($config.version -ne 1 -or @($config.sources).Count -eq 0) { throw 'Invalid music inbox configuration.' }
-    foreach ($name in @('recursive','importToRekordbox')) {
+    # Settings saved before analysis existed analyze new tracks by default.
+    if (-not $config.PSObject.Properties['analyze']) { $config | Add-Member -NotePropertyName analyze -NotePropertyValue $true }
+    foreach ($name in @('recursive','importToRekordbox','analyze')) {
         if ($config.$name -isnot [bool]) { throw "Invalid $name setting." }
     }
     if ($config.layout -notin @('ArtistAlbum','PreserveFolders','Flat') -or $config.originals -notin @('Move','Copy') -or $config.artistFolder -notin @('AlbumArtist','TrackArtist')) { throw 'Unsupported organization setting.' }
@@ -235,7 +237,7 @@ function Save-MusicSource {
 }
 
 function Invoke-MusicLibraryImport {
-    param([string]$Executable,[string[]]$Paths,[string]$Root,[string]$Reports)
+    param([string]$Executable,[string[]]$Paths,[string]$Root,[string]$Reports,[switch]$Analyze)
     $arguments = ''
     foreach ($path in $Paths) {
         $full = Assert-MusicPath $path $Root
@@ -243,6 +245,7 @@ function Invoke-MusicLibraryImport {
         $arguments += '--import "' + $full + '" '
     }
     $report = Join-Path $Reports ([guid]::NewGuid().ToString('N') + '-import.json')
+    if ($Analyze) { $arguments += '--analyze ' }
     $arguments += '--import-report "' + $report + '"'
     if ($arguments.Length -gt 30000) { throw 'Import batch is too long.' }
     $process = Start-Process -FilePath $Executable -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
@@ -256,7 +259,9 @@ function Invoke-MusicLibraryImport {
     foreach ($field in @('imported','tracks','existing','skipped')) { if (-not $result.report.PSObject.Properties[$field]) { throw 'Incomplete library import report.' } }
     if (@($result.report.skipped).Count -ne 0 -or [int]$result.report.imported -ne @($result.report.tracks).Count) { throw 'Inconsistent library import report.' }
     if ([int]$result.report.imported + @($result.report.existing).Count -ne $Paths.Count) { throw 'Library report did not account for every queued file.' }
-    $result.report
+    # One entry per analysed track; a failed analysis leaves the track imported.
+    $analysis = if ($result.PSObject.Properties['analysis']) { @($result.analysis) } else { @() }
+    $result.report | Add-Member -NotePropertyName analysis -NotePropertyValue $analysis -PassThru
 }
 
 function Select-MusicFolder {

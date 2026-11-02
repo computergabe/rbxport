@@ -9,13 +9,15 @@ https://aka.ms/vc14/vc_redist.x64.exe
    In Preferences, disable Library Protection when you want imports.
    Close RBXPORT.
 3. Open PowerShell in this folder and run:
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-Music-Import.ps1
-4. Choose sources, WHERE SONGS LIVE, layout, Copy/Move, and import preference.
-   Press Enter at a folder question to browse instead of typing a path.
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Music-Import-GUI.ps1
+4. In the window, add an inbox folder, choose your music library folder,
+   layout, Copy/Move, and import preference. The first import saves them
+   and creates the Music to Rekordbox desktop button.
 5. Finish downloading; close rekordbox and its tray agent.
-   Click the Music to Rekordbox desktop button. Reopen rekordbox afterward.
-   Press Enter for your saved inbox, F to pick a folder for this run only,
-   or S to change settings.
+   Click the desktop button, then Import from inbox (or Import a folder...
+   for a one-time folder). Reopen rekordbox when it says Finished.
+   Upgrading? Run .\Create-Desktop-Shortcut.ps1 -Replace to make an older
+   button open the window.
 
 Runs once per click; no background watcher. XML is not needed.
 Copy keeps downloads. Move removes them only after verification and queuing.

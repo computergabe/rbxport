@@ -7,6 +7,7 @@
     [ValidateSet('AlbumArtist','TrackArtist')][string]$ArtistFolder = 'AlbumArtist',
     [switch]$Recursive,
     [switch]$OrganizeOnly,
+    [switch]$SkipAnalysis,
     [switch]$NonInteractive,
     [switch]$NoShortcut
 )
@@ -35,19 +36,20 @@ if (-not $NonInteractive) {
         $Sources += $source
         Write-Host ('  Inbox added: ' + $source) -ForegroundColor DarkGray
     }
-    $defaultRoot = if ($previous -and $previous.musicRoot) { $previous.musicRoot } else { Join-Path ([Environment]::GetFolderPath('MyMusic')) 'WHERE SONGS LIVE' }
-    $MusicRoot = ([string](Read-Host ('WHERE SONGS LIVE - permanent music folder. Enter = browse, or paste a path [' + $defaultRoot + ']'))).Trim().Trim('"')
+    $defaultRoot = if ($previous -and $previous.musicRoot) { $previous.musicRoot } else { Join-Path ([Environment]::GetFolderPath('MyMusic')) 'Rekordbox Music' }
+    $MusicRoot = ([string](Read-Host ('Music library folder - where your music is kept and rekordbox plays it from. Enter = browse, or paste a path [' + $defaultRoot + ']'))).Trim().Trim('"')
     if (-not $MusicRoot) {
-        $MusicRoot = Select-MusicFolder 'Choose WHERE SONGS LIVE - the permanent folder rekordbox will play your music from.' $defaultRoot
+        $MusicRoot = Select-MusicFolder 'Choose your music library folder - where your music is kept and rekordbox plays it from.' $defaultRoot
         if (-not $MusicRoot) { $MusicRoot = $defaultRoot }
     }
-    Write-Host ('  WHERE SONGS LIVE: ' + $MusicRoot) -ForegroundColor DarkGray
+    Write-Host ('  Music library folder: ' + $MusicRoot) -ForegroundColor DarkGray
     $Recursive = (Pick 'Include inbox subfolders? Y/N' 'N') -match '^y'
     $choice = Pick 'Layout: 1 Artist/Album/Filename, 2 Preserve inbox/ZIP folders, 3 Flat' '1'
     $Layout = switch ($choice) { '1' {'ArtistAlbum'} '2' {'PreserveFolders'} '3' {'Flat'} default {throw 'Choose layout 1, 2, or 3.'} }
     $Originals = Pick 'Originals: Copy keeps downloads; Move deletes after verification. Copy/Move' 'Copy'
     $ArtistFolder = Pick 'Artist folders: AlbumArtist or TrackArtist' 'AlbumArtist'
     $OrganizeOnly = (Pick 'Also register tracks in the current rekordbox library? Y/N' 'Y') -notmatch '^y'
+    if (-not $OrganizeOnly) { $SkipAnalysis = (Pick 'Analyze new tracks with RBXport (Electronic Music)? Y/N' 'Y') -notmatch '^y' }
 }
 if (@($Sources).Count -eq 0 -or [string]::IsNullOrWhiteSpace($MusicRoot)) { throw 'Choose at least one source and a permanent music folder.' }
 if ($Originals -notin @('Copy','Move') -or $ArtistFolder -notin @('AlbumArtist','TrackArtist')) { throw 'Invalid originals or artist folder choice.' }
@@ -61,10 +63,10 @@ foreach ($source in $Sources) {
     if (($source.TrimEnd('\') + '\').StartsWith(($MusicRoot.TrimEnd('\') + '\'),[StringComparison]::OrdinalIgnoreCase)) { throw 'An inbox must be outside your permanent music folder.' }
 }
 foreach ($pending in @(Get-MusicPending (Join-Path $PSScriptRoot 'Music-Import.pending.json'))) { Assert-MusicPath $pending $MusicRoot | Out-Null }
-$config = [ordered]@{version=1;sources=@($Sources);musicRoot=$MusicRoot;recursive=[bool]$Recursive;layout=$Layout;originals=$Originals;artistFolder=$ArtistFolder;importToRekordbox=(-not [bool]$OrganizeOnly)}
-Write-Host ('WHERE SONGS LIVE: ' + $MusicRoot)
+$config = [ordered]@{version=1;sources=@($Sources);musicRoot=$MusicRoot;recursive=[bool]$Recursive;layout=$Layout;originals=$Originals;artistFolder=$ArtistFolder;importToRekordbox=(-not [bool]$OrganizeOnly);analyze=(-not [bool]$SkipAnalysis)}
+Write-Host ('Music library folder: ' + $MusicRoot)
 Write-Host ('Sources: ' + ($Sources -join ', '))
-Write-Host ("Layout: $Layout; originals: $Originals; library import: " + $config.importToRekordbox)
+Write-Host ("Layout: $Layout; originals: $Originals; library import: " + $config.importToRekordbox + '; analyze: ' + $config.analyze)
 if (-not $NonInteractive -and (Pick 'Save these settings? Y/N' 'Y') -notmatch '^y') { throw 'Setup cancelled.' }
 New-Item -ItemType Directory -Path $MusicRoot -Force | Out-Null
 Write-MusicJson $ConfigPath $config

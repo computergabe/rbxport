@@ -5,13 +5,13 @@ if (Test-Path -LiteralPath $FixtureRoot) { throw 'Choose a new fixture directory
 $root=[IO.Path]::GetFullPath($FixtureRoot)
 $inbox=Join-Path $root 'Inbox'
 $other=Join-Path $root 'Other'
-$music=Join-Path $root 'WHERE SONGS LIVE'
+$music=Join-Path $root 'Music Library'
 $package=Join-Path $root 'Launcher'
 $app=Join-Path $package 'RBXPORT-Music'
 $reports=Join-Path $package 'reports'
 $desktop=Join-Path $root 'Desktop'
 foreach($path in @($root,$inbox,$other,$music,$app,$reports,$desktop)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
-foreach($name in @('Music-To-Rekordbox.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1')) {
+foreach($name in @('Music-To-Rekordbox.ps1','Music-Import-GUI.ps1','Music-Import.Core.psm1','Setup-Music-Import.ps1','Create-Desktop-Shortcut.ps1')) {
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $package
  $tokens=$null; $errors=$null
  [Management.Automation.Language.Parser]::ParseFile((Join-Path $package $name),[ref]$tokens,[ref]$errors) | Out-Null
@@ -37,8 +37,10 @@ class MusicMock {
   if(File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"refuse"))) {
    File.WriteAllText(report,json.Serialize(new {ok=false,error="Fixture library refusal"})); return 1;
   }
-  var tracks=new List<object>(); for(int i=0;i<args.Length-2;i+=2) tracks.Add(new {id="fixture",path=args[i+1]});
-  File.WriteAllText(report,json.Serialize(new {ok=true,report=new {imported=tracks.Count,tracks=tracks,existing=new object[0],skipped=new string[0]}})); return 0;
+  var paths=new List<string>(args); bool analyze=paths.Remove("--analyze");
+  var tracks=new List<object>(); var analysis=new List<object>();
+  for(int i=0;i<paths.Count-2;i+=2) { tracks.Add(new {id="fixture",path=paths[i+1]}); if(analyze) analysis.Add(new {trackId="fixture",title=Path.GetFileName(paths[i+1]),ok=!paths[i+1].Contains("undecodable"),error="Fixture decode failure"}); }
+  File.WriteAllText(report,json.Serialize(new {ok=true,report=new {imported=tracks.Count,tracks=tracks,existing=new object[0],skipped=new string[0]},analysis=analysis})); return 0;
  }
 }
 '@
@@ -90,8 +92,10 @@ try {Invoke-MusicLibraryImport $exe @(Get-MusicPending $queue) $music $reports |
 catch {Assert ($_.Exception.Message -like '*Fixture library refusal*') 'Unexpected refusal error.'}
 Assert (@(Get-MusicPending $queue).Count -eq $before) 'Refusal lost queue.'
 Remove-Item -LiteralPath $refuse
-$result=Invoke-MusicLibraryImport $exe @(Get-MusicPending $queue) $music $reports
+$result=Invoke-MusicLibraryImport $exe @(Get-MusicPending $queue) $music $reports -Analyze
 Assert ($result.imported -eq $before) 'Import omitted tracks.'
+Assert (@($result.analysis | Where-Object {$_.ok}).Count -eq $before) 'Analysis results were not reported.'
+Assert ((Read-MusicSettings $configPath).analyze -eq $true) 'Analysis is not on by default.'
 Write-MusicJson $queue @{version=1;files=@()}
 if(-not (Get-Process | Where-Object {$_.ProcessName -match '^(rekordbox|rekordboxagent|rbxport)$'})) {
  $config.importToRekordbox=$true; Write-MusicJson $configPath $config; Run 0
@@ -131,12 +135,12 @@ Assert (-not (Test-Path -LiteralPath $pickedTrack)) 'Picked folder was not impor
 Assert (Test-Path -LiteralPath $notPicked) 'Saved inbox processed during a picked-folder run.'
 Assert (@((Read-MusicSettings $configPath).sources) -notcontains $picked) 'Picked folder replaced saved settings.'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Music-To-Rekordbox.ps1') -NoPause -Source $music
-Assert ($LASTEXITCODE -eq 1) 'Picking WHERE SONGS LIVE as a source was accepted.'
+Assert ($LASTEXITCODE -eq 1) 'Picking the music library folder as a source was accepted.'
 & (Join-Path $package 'Create-Desktop-Shortcut.ps1') -DesktopDirectory $desktop
 $link=@(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk')[0]
 $ascii=Join-Path $desktop 'inspect.lnk';Copy-Item -LiteralPath $link.FullName -Destination $ascii
 $shortcut=(New-Object -ComObject WScript.Shell).CreateShortcut($ascii)
-Assert ($shortcut.Arguments -like '*-NoProfile -ExecutionPolicy Bypass*Music-To-Rekordbox.ps1*') 'Shortcut arguments differ.'
+Assert ($shortcut.Arguments -like '*-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden*Music-Import-GUI.ps1*') 'Shortcut arguments differ.'
 Assert ($shortcut.Arguments -notlike '*Watch*') 'Watch enabled.'
 Write-Output 'Universal music fixtures passed: ZIP, standalone, tags, collisions, extras, copy/move, retry, layouts, offline storage, shortcut.'
 exit 0
