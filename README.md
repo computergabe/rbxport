@@ -12,9 +12,11 @@ music folder, organize ZIPs and individual audio files, and register their
 tracks in the active rekordbox library with a desktop button.
 This is an independent Windows release, not an official upstream release.
 
-Version **1.3.0** adds a Music to Rekordbox window and analyzes imported tracks
-with the RBXport (Electronic Music) preset, in a form rekordbox keeps: no
-re-analysis prompt, and Beat Sync works. Upstream updates stay blocked; update
+Version **1.3.1** fills missing tags from file and folder names (like Mp3tag's
+Filename → Tag), sets one spelling per artist, lets you choose the analysis
+BPM range, and finds and relocates missing files. Since 1.3.0 the Music to
+Rekordbox window analyzes imported tracks with the RBXport (Electronic Music)
+preset, in a form rekordbox keeps: no re-analysis prompt, and Beat Sync works. Upstream updates stay blocked; update
 checks and release notes open this fork's releases, and upgrades are manual.
 Bug reports open [this fork's GitHub issues](https://github.com/computergabe/rbxport/issues).
 See the [upgrade instructions](docs/user/windows-import.md#upgrade-from-120) if you
@@ -78,7 +80,7 @@ The app supports repeated `--import <path>` arguments with
 
 See the [PowerShell guide](docs/user/windows-import.md) for examples, reports,
 recovery, Windows prerequisites, Tauri builds, and packaging instructions.
-Use this fork's default branch or the `windows-music-1.3.0` release tag.
+Use this fork's default branch or the `windows-music-1.3.1` release tag.
 
 The full Windows workspace suite and Clippy checks pass locally, along with
 frontend lint, unit, build, bundle-budget, Chromium UI, and disposable
