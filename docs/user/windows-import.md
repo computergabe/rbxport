@@ -105,6 +105,10 @@ or none are listed for you to relocate in rekordbox. Close rekordbox first;
 while it is open, the check only lists what it finds. From PowerShell, run
 `Music-To-Rekordbox.ps1 -CheckMissing`.
 
+rekordbox can also call a track missing when its file is still there but its
+size changed, for example after another tag editor saved it. Select the track
+in rekordbox and use **Reload Tag** to record the new size.
+
 ### Console launcher
 
 `Music-To-Rekordbox.ps1` still works without the window. It opens a short menu:
@@ -221,10 +225,13 @@ in the detected library through RBXPORT's import routine. Generating XML and
 manually importing it would be a separate workflow; this launcher does not
 generate or import XML.
 
-Imported tracks appear in the Collection. The button does not request beat,
-key, or grid analysis; rekordbox can use its normal analysis settings after
-reopening. Native direct import was verified on rekordbox 7.2.19; other
-versions and storage arrangements have not all been verified.
+Imported tracks appear in the Collection. With **Analyze them** ticked, they
+arrive analyzed (beat grid, BPM, key and waveforms) and rekordbox does not
+analyze them again; untick it to leave analysis to rekordbox. Native direct
+import, analysis, Beat Sync and missing-file relocation were verified on
+rekordbox 7.2.19; other versions and storage arrangements have not all been
+verified. [How the import works inside rekordbox](../reference/windows-import-internals.md)
+records what rekordbox needs and why.
 
 ## Feedback, retries, and recovery
 
@@ -272,7 +279,25 @@ imported and can safely be retried. The app waits up to two minutes for startup.
 
 It refuses imports while rekordbox, its tray agent, or another RBXPORT instance
 is running. It respects Library Protection and takes an exclusive import lock.
-It does not extract ZIPs, move audio, start a watcher, or request analysis.
+It does not extract ZIPs, move audio, or start a watcher.
+
+Optional import arguments:
+
+| Argument | Effect |
+| --- | --- |
+| `--analyze` | Analyze tracks it adds, and registered tracks that were never analyzed or were analyzed by RBXPORT before 1.3.0, with the RBXport (Electronic Music) preset. The report gains `analysis`. |
+| `--analyze-bpm <min>-<max>` | With `--analyze`, the tempo range (default `70-180`). |
+| `--reanalyze` | With `--analyze`, analyze every imported track again. |
+
+`--find-missing <folder> [--find-missing <folder>] [--relocate] --missing-report <new.json>`
+lists library tracks whose local file is gone and, with `--relocate`, points
+each one with a single clear match in the folders at that file. Streaming
+tracks are skipped. Relocation needs rekordbox closed; listing does not.
+
+`--write-tags <list.json> --write-tags-report <new.json>` writes tags into
+audio files. The list is a UTF-8 JSON array of objects with `path` and any of
+`artist`, `albumArtist`, `album`, `title`, `trackNumber` and `year`. The
+organizer only uses it on its own verified copies.
 
 ## Read-only metadata command
 

@@ -87,9 +87,14 @@ frontend lint, unit, build, bundle-budget, Chromium UI, and disposable
 PowerShell file-handling checks. Regression tests cover Windows folders,
 short paths, junctions, drive letters, and file locking. GitHub hosts the
 finished source and release; hosted builds are optional manual workflows.
-Direct library import was verified on rekordbox 7.2.19. This is not a claim of
-compatibility with every version or drive arrangement. Keep a library backup
-before use.
+Direct library import was verified on rekordbox 7.2.19, including a real
+41-track download that arrived untagged and was tagged, sorted, registered and
+analyzed with no errors, then played, beat-synced and checked in rekordbox.
+[How the import works inside rekordbox](docs/reference/windows-import-internals.md)
+records what rekordbox needs and what went wrong on the way. This is not a
+claim of compatibility with every version or drive arrangement. Keep a library
+backup before use. Contributors and coding agents should read
+[AGENTS.md](AGENTS.md) first.
 
 ## About the original project
 
