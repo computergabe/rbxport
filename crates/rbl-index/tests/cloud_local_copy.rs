@@ -4,6 +4,7 @@
 //! On that machine rekordbox opens and shows `OrgFolderPath` (issue #176).
 //! See `rbl_db::track_path`.
 use rbl_db::{fixture, Library, OpenMode};
+use std::path::PathBuf;
 
 const OWN: &str = "1a2b3c4d";
 const CLOUD: &str = "/contents_1739239895/coredata/wonderland/14659475 coredata.mp3";
@@ -43,12 +44,12 @@ fn an_own_cloud_track_opens_and_shows_its_local_copy() {
 
     // The Dropbox folder is fixed so the test does not depend on this
     // machine's rekordbox settings or Dropbox app.
-    let dropbox = "/Users/dj/Library/CloudStorage/Dropbox";
+    let dropbox = if cfg!(windows) { "C:/Users/dj/Dropbox" } else { "/Users/dj/Library/CloudStorage/Dropbox" };
     let db = Library::open(location.clone(), OpenMode::ReadOnly).unwrap();
     assert!(db.set_dropbox_folder(Some(dropbox.to_owned())));
     let (index, _) = rbl_index::load(&db).unwrap();
     assert_eq!(path_of(&index, 0), LOCAL);
-    assert_eq!(path_of(&index, 1), format!("{dropbox}/rekordbox{CLOUD}"));
+    assert_eq!(PathBuf::from(path_of(&index, 1)), PathBuf::from(dropbox).join(format!("rekordbox{CLOUD}")));
     assert_eq!(path_of(&index, 2), LOCAL);
 
     // The Info panel's Location: the local copy for this machine's track,

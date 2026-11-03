@@ -23,6 +23,8 @@ blowfish = "0.9"
 byteorder = "1"
 cipher = "0.4"
 base64 = "0.22"
+# Fingerprints analysis files in `contentFile`, which rekordbox keys by MD5.
+md5 = { package = "md-5", version = "0.10" }
 dirs = "5"
 sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 # Tag reading for import. Default features pull in every format; the library

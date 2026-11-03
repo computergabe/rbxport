@@ -1,0 +1,36 @@
+MUSIC TO REKORDBOX - WINDOWS RELEASE
+
+Needs Windows x64, Windows PowerShell 5.1, WebView2, and Microsoft's current
+Visual C++ x64 runtime. If MSVCP140.dll or VCRUNTIME140.dll is missing, install:
+https://aka.ms/vc14/vc_redist.x64.exe
+
+1. Keep this extracted package in a permanent writable folder.
+2. Open RBXPORT-Music\rbxport.exe once.
+   In Preferences, disable Library Protection when you want imports.
+   Close RBXPORT.
+3. Open PowerShell in this folder and run:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Music-Import-GUI.ps1
+4. In the window, add an inbox folder, choose your music library folder,
+   layout, Copy/Move, and import preference. The first import saves them
+   and creates the Music to Rekordbox desktop button.
+5. Finish downloading; close rekordbox and its tray agent.
+   Click the desktop button, then Import from inbox (or Import a folder...
+   for a one-time folder). Reopen rekordbox when it says Finished.
+   Upgrading? Run .\Create-Desktop-Shortcut.ps1 -Replace to make an older
+   button open the window.
+
+Runs once per click; no background watcher. XML is not needed.
+Copy keeps downloads. Move removes them only after verification and queuing.
+Use this for new downloads; it does not migrate already-registered music.
+Select the intended library in rekordbox first; external drives must be connected.
+
+Read POWERSHELL-GUIDE.md for setup, formats, verification, errors, and recovery.
+This unsigned independent release is not an official upstream release.
+Source: https://github.com/computergabe/rbxport
+License: GPL-2.0-or-later. License text and build information are included.
+
+Version 1.3.1 fills missing tags from file and folder names, sets artist
+spellings and the analysis BPM range, and fixes missing files. New tracks are
+analyzed (RBXport Electronic Music) so rekordbox keeps the analysis. In-app updates stay blocked.
+Updates and bug reports open this fork on GitHub.
+For upgrades, close RBXPORT and replace package files; keep your configuration and queue.
