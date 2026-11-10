@@ -25,6 +25,13 @@ fn fixture_with(shape: Shape) -> Fixture {
     Fixture { _dir: dir, writer }
 }
 
+/// A path as an import stores it: with forward slashes on Windows, as
+/// rekordbox does.
+fn stored(path: &std::path::Path) -> String {
+    let text = path.to_string_lossy().into_owned();
+    if cfg!(windows) { text.replace('\\', "/") } else { text }
+}
+
 fn fixture() -> Fixture {
     fixture_with(Shape::default())
 }
@@ -966,7 +973,7 @@ fn a_track_can_be_pointed_at_a_moved_file() {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    assert_eq!(folder, moved.to_string_lossy());
+    assert_eq!(folder, stored(&moved));
     assert_eq!(name, "moved elsewhere.mp3");
 }
 
@@ -1297,7 +1304,7 @@ fn an_import_carries_what_rekordbox_needs_to_open_the_file() {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?, r.get(9)?, r.get(10)?)),
         )
         .unwrap();
-    assert_eq!(folder, path.to_string_lossy());
+    assert_eq!(folder, stored(&path));
     assert_eq!((file_type, depth), (11, 16), "a 16-bit wav");
     assert_eq!(stock.len(), 10, "{stock}");
     assert_eq!(stock, created);
@@ -1350,7 +1357,7 @@ fn an_import_records_where_the_file_is_and_how_long_it_runs() {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .unwrap();
-    assert_eq!(folder, path.to_string_lossy());
+    assert_eq!(folder, stored(&path));
     assert_eq!(name, "Track.wav");
     assert_eq!(length, 3);
 }
@@ -1371,7 +1378,18 @@ fn an_imported_file_is_found_again_by_its_path() {
     // Another spelling of the same Windows path is the same file.
     if cfg!(windows) {
         let shouted = std::path::PathBuf::from(path.to_string_lossy().to_uppercase());
-        assert_eq!(f.writer.track_id_at(&shouted).unwrap(), Some(id));
+        assert_eq!(f.writer.track_id_at(&shouted).unwrap(), Some(id.clone()));
+        // Stored as rekordbox stores it, with forward slashes, and found by
+        // either slash, as is a row an older import stored with backslashes.
+        let stored: String = f.writer.library().connection()
+            .query_row("SELECT FolderPath FROM djmdContent WHERE ID = ?1", [&id], |r| r.get(0)).unwrap();
+        assert!(!stored.contains('\\'), "{stored}");
+        f.writer.library().connection()
+            .execute("UPDATE djmdContent SET FolderPath = replace(FolderPath, '/', '\\') WHERE ID = ?1", [&id]).unwrap();
+        assert_eq!(f.writer.track_id_at(&path).unwrap(), Some(id.clone()));
+        assert!(f.writer.import_file(&path).is_err());
+        let forward = std::path::PathBuf::from(path.to_string_lossy().replace('\\', "/"));
+        assert_eq!(f.writer.track_id_at(&forward).unwrap(), Some(id));
     }
 }
 
@@ -1861,12 +1879,12 @@ fn a_rekordbox_xml_document_is_imported_with_its_playlists_and_cues() {
 
     let (rating, comment): (i64, String) = f
         .conn()
-        .query_row("SELECT Rating, Commnt FROM djmdContent WHERE FolderPath = ?1", [one.to_string_lossy()], |r| Ok((r.get(0)?, r.get(1)?)))
+        .query_row("SELECT Rating, Commnt FROM djmdContent WHERE FolderPath = ?1", [stored(&one)], |r| Ok((r.get(0)?, r.get(1)?)))
         .unwrap();
     assert_eq!((rating, comment.as_str()), (3, "hi"));
     let kinds: Vec<(i64, i64, i64)> = {
         let mut stmt = f.conn().prepare("SELECT Kind, InMsec, OutMsec FROM djmdCue WHERE ContentID = (SELECT ID FROM djmdContent WHERE FolderPath = ?1) AND rb_local_deleted = 0 ORDER BY InMsec").unwrap();
-        stmt.query_map([one.to_string_lossy()], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?.unwrap_or(-1)))).unwrap().map(|r| r.unwrap()).collect()
+        stmt.query_map([stored(&one)], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?.unwrap_or(-1)))).unwrap().map(|r| r.unwrap()).collect()
     };
     assert_eq!(kinds, vec![(1, 250, -1), (3, 500, 1000), (0, 1500, -1)]);
     let folder: String = f.one("SELECT ID FROM djmdPlaylist WHERE Name = 'Sets' AND Attribute = 1", &[]);
@@ -1963,8 +1981,8 @@ fn importing_the_same_rekordbox_xml_twice_doubles_nothing() {
             .unwrap();
         stmt.query_map([playlist], |r| r.get(0)).unwrap().map(Result::unwrap).collect()
     };
-    assert_eq!(members(&f, &same[0]), vec![one.to_string_lossy().into_owned()]);
-    assert_eq!(members(&f, &same[1]), vec![two.to_string_lossy().into_owned()]);
+    assert_eq!(members(&f, &same[0]), vec![stored(&one)]);
+    assert_eq!(members(&f, &same[1]), vec![stored(&two)]);
 
     // A newer export of the same collection with a track added to a playlist
     // lands that one track in the playlist already there, and nothing else.
@@ -1975,9 +1993,9 @@ fn importing_the_same_rekordbox_xml_twice_doubles_nothing() {
     assert_eq!(
         members(&f, &warm_up),
         vec![
-            one.to_string_lossy().into_owned(),
-            two.to_string_lossy().into_owned(),
-            three.to_string_lossy().into_owned()
+            stored(&one),
+            stored(&two),
+            stored(&three)
         ],
     );
     assert_eq!(f.track_numbers(&warm_up), vec![1, 2, 3]);

@@ -51,11 +51,14 @@ pub struct AnalysisSettings {
     /// Add a memory cue on the first beat of the new grid, unless one is
     /// already there. Only a BPM / Grid pass has a grid to place it on.
     pub first_beat_cue: bool,
+    /// One tempo for the whole track (rekordbox's Normal mode) rather than
+    /// a grid that follows tempo changes (Dynamic).
+    pub constant_tempo: bool,
 }
 
 impl Default for AnalysisSettings {
     fn default() -> Self {
-        Self { bpm_grid: true, key: true, high_precision: true, min_bpm: 70.0, max_bpm: 180.0, first_beat_cue: false }
+        Self { bpm_grid: true, key: true, high_precision: true, min_bpm: 70.0, max_bpm: 180.0, first_beat_cue: false, constant_tempo: false }
     }
 }
 
@@ -71,6 +74,7 @@ impl AnalysisSettings {
         let mut options = preset.options();
         options.tempo.min_bpm = self.min_bpm;
         options.tempo.max_bpm = self.max_bpm;
+        options.tempo.constant = self.constant_tempo;
         options.tempo.placement = if self.high_precision {
             rbl_analysis::tempo::Placement::Attack
         } else {
@@ -151,7 +155,8 @@ pub fn analyse_imported(
     bpm: (u16, u16),
 ) -> AppResult<AnalysisResultDto> {
     let share = state.share_root();
-    let settings = AnalysisSettings { min_bpm: f64::from(bpm.0), max_bpm: f64::from(bpm.1), ..AnalysisSettings::default() };
+    // Imports get a static grid: one BPM for the whole track.
+    let settings = AnalysisSettings { min_bpm: f64::from(bpm.0), max_bpm: f64::from(bpm.1), constant_tempo: true, ..AnalysisSettings::default() };
     analyse_and_save(state, library, &share, track_id, rbl_analysis::AnalysisPreset::Rbxport, &settings, editor)
 }
 

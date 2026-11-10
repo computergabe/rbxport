@@ -31,7 +31,10 @@ Read that before changing analysis, `PPTH`, `contentFile` or path matching.
 
 - rekordbox 7 ignores analysis whose files don't match their `contentFile`
   rows, and ignores the beat grid unless `PPTH` is `?/<file name>`.
-- Match `FolderPath` case-insensitively on Windows.
+- Store `FolderPath` with forward slashes on Windows, as rekordbox does, and
+  match it case-insensitively with either slash.
+- Imports analyze with a static grid (`constant_tempo`); don't let
+  segmented (Dynamic) grids back into the import path.
 - `FolderPath` can be a streaming link (`spotify:track:...`); never treat it
   as a missing file.
 - Never write to the user's download. Tags go into the verified copy in the

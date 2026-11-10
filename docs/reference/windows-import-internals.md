@@ -67,12 +67,27 @@ upstream commit `6f3a417b`.
 analyzed track), while RBXPORT's index reports it as 0 or 1. Tests compare
 against the index value.
 
-### Paths are case-insensitive on Windows
+### Paths ignore case and slash direction on Windows
 
 rekordbox can store a path with different capitalization than the file
 system reports. Looking up a track by an exact path missed it, and the same
 file was registered twice (two rows of one track, one with a half-time BPM).
 `track_id_at` now compares `FolderPath` with `COLLATE NOCASE` on Windows.
+
+rekordbox itself stores Windows paths with forward slashes
+(`C:/Users/...`). Up to 1.3.1 the importer stored them with backslashes, so
+a file rekordbox had added and the importer then imported again got a second
+row: 245 of the maintainer's 312 tracks were in the Collection twice. Paths
+are now stored with forward slashes, and the lookup and the duplicate check
+compare with backslashes turned into forward slashes.
+
+### Static grids
+
+The analyzer splits a track into tempo segments where it hears a tempo
+change, a ramp or a gap. That is a Dynamic grid, and DJ tools treat it
+differently from a fixed tempo. Imports use `TempoOptions::constant`: the
+whole track is fitted as one line at one BPM, as rekordbox's Normal mode
+does. The RBXPORT app's own Analyze dialog still produces segmented grids.
 
 ### Streaming tracks are not files
 
@@ -125,6 +140,7 @@ The ZIP's artwork and other non-audio files went to
 | --- | --- |
 | 1.3.0 | The Music to Rekordbox window; analysis while importing; `contentFile` fingerprints; share-tree `PPTH` so Beat Sync works. |
 | 1.3.1 | Tags from file and folder names; artist spellings; BPM range; Fix missing files; case-insensitive path lookup. |
+| next | Static (one-BPM) grids for imports; paths stored with forward slashes and matched with either slash. |
 
 ## Known limits
 

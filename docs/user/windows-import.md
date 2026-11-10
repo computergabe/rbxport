@@ -58,7 +58,9 @@ explains the requirement. Build tools are only needed to compile from source.
 
 With **Analyze them** ticked (the default), each new track gets its beat grid,
 BPM, key and waveforms written into the library while it is registered, a few
-seconds per track. rekordbox 7 keeps that analysis: it does not ask to analyze
+seconds per track. The grid is static: one BPM for the whole track, like
+rekordbox's Normal analysis mode, never a Dynamic grid that follows tempo
+changes. rekordbox 7 keeps that analysis: it does not ask to analyze
 the track again, and Beat Sync works. A track that cannot be analyzed is still
 imported and is listed in the output; analyze it in rekordbox or RBXPORT.
 

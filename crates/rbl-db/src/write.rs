@@ -1094,14 +1094,15 @@ impl Writer {
     /// [`Self::import_file`] cleans it, so the two agree on what "already
     /// there" means.
     pub fn track_id_at(&self, path: &Path) -> Result<Option<String>> {
-        let path = normalized(path);
-        let folder = path.to_string_lossy().into_owned();
-        // Windows paths ignore case: `IMMIX\a.wav` and `immix\a.wav` are one
-        // file, and matching them exactly registered it twice. NOCASE folds
+        let folder = stored_path(&normalized(path));
+        // Windows paths ignore case and take either slash: `IMMIX\a.wav`,
+        // `immix\a.wav` and `IMMIX/a.wav` are one file, and matching them
+        // exactly registered it twice. Rows imported before paths were
+        // stored with forward slashes still hold backslashes. NOCASE folds
         // ASCII only, which covers the drive letters and folder names that
         // differ in practice.
         let sql = if cfg!(windows) {
-            "SELECT ID FROM djmdContent WHERE FolderPath = ?1 COLLATE NOCASE AND rb_local_deleted = 0 ORDER BY ID LIMIT 1"
+            "SELECT ID FROM djmdContent WHERE replace(FolderPath, '\\', '/') = ?1 COLLATE NOCASE AND rb_local_deleted = 0 ORDER BY ID LIMIT 1"
         } else {
             "SELECT ID FROM djmdContent WHERE FolderPath = ?1 AND rb_local_deleted = 0 ORDER BY ID LIMIT 1"
         };
@@ -1142,7 +1143,7 @@ impl Writer {
         let uuid = self.rng.uuid4();
         let stamp = time::now();
         let today = stamp.get(..10).unwrap_or_default().to_owned();
-        let folder = path.to_string_lossy().into_owned();
+        let folder = stored_path(path);
         // The library's own device: `djmdProperty` names it, and every one of
         // the 645 rows rekordbox 7 imported on this machine carries the pair.
         let (master_db, device): (Option<String>, Option<String>) = self
@@ -1161,7 +1162,11 @@ impl Writer {
         // Already in the library: importing again would give one file two
         // rows, and every playlist pointing at the wrong one.
         let existing: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM djmdContent WHERE FolderPath = ?1 AND rb_local_deleted = 0",
+            if cfg!(windows) {
+                "SELECT COUNT(*) FROM djmdContent WHERE replace(FolderPath, '\\', '/') = ?1 COLLATE NOCASE AND rb_local_deleted = 0"
+            } else {
+                "SELECT COUNT(*) FROM djmdContent WHERE FolderPath = ?1 AND rb_local_deleted = 0"
+            },
             params![folder],
             |r| r.get(0),
         )?;
@@ -2343,7 +2348,7 @@ impl Writer {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let full = path.to_string_lossy().into_owned();
+        let full = stored_path(path);
         self.prepare()?;
         let tx = self.library.connection_mut().transaction_with_behavior(TransactionBehavior::Immediate)?;
         let usn = next_usn(&tx)?;
@@ -2717,6 +2722,13 @@ fn normalized(path: &Path) -> PathBuf {
         }
     }
     out
+}
+
+/// A path as rekordbox stores it in `FolderPath`: on Windows with forward
+/// slashes (`C:/Users/…`), as every row rekordbox 7 imports itself has.
+fn stored_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    if cfg!(windows) { text.replace('\\', "/") } else { text.into_owned() }
 }
 
 /// The `djmdKey` row for a key name: where two rows share a name, the one
