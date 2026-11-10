@@ -51,11 +51,14 @@ pub struct AnalysisSettings {
     /// Add a memory cue on the first beat of the new grid, unless one is
     /// already there. Only a BPM / Grid pass has a grid to place it on.
     pub first_beat_cue: bool,
+    /// One tempo for the whole track (rekordbox's Normal mode) rather than
+    /// a grid that follows tempo changes (Dynamic).
+    pub constant_tempo: bool,
 }
 
 impl Default for AnalysisSettings {
     fn default() -> Self {
-        Self { bpm_grid: true, key: true, high_precision: true, min_bpm: 70.0, max_bpm: 180.0, first_beat_cue: false }
+        Self { bpm_grid: true, key: true, high_precision: true, min_bpm: 70.0, max_bpm: 180.0, first_beat_cue: false, constant_tempo: false }
     }
 }
 
@@ -71,6 +74,7 @@ impl AnalysisSettings {
         let mut options = preset.options();
         options.tempo.min_bpm = self.min_bpm;
         options.tempo.max_bpm = self.max_bpm;
+        options.tempo.constant = self.constant_tempo;
         options.tempo.placement = if self.high_precision {
             rbl_analysis::tempo::Placement::Attack
         } else {
@@ -138,6 +142,22 @@ pub async fn analyse_track<R: tauri::Runtime>(
         let _ = tauri::Emitter::emit(&app, "cues:changed", &result.track_id);
     }
     Ok(result)
+}
+
+/// What the headless import runs for each track it analyses: the RBXport
+/// (Electronic Music) preset with the Analysis Setting dialog's defaults and
+/// the given BPM range, which decides between half and double time.
+pub fn analyse_imported(
+    state: &AppState,
+    library: &rbl_index::Library,
+    track_id: &str,
+    editor: &crate::grid::GridEditor,
+    bpm: (u16, u16),
+) -> AppResult<AnalysisResultDto> {
+    let share = state.share_root();
+    // Imports get a static grid: one BPM for the whole track.
+    let settings = AnalysisSettings { min_bpm: f64::from(bpm.0), max_bpm: f64::from(bpm.1), constant_tempo: true, ..AnalysisSettings::default() };
+    analyse_and_save(state, library, &share, track_id, rbl_analysis::AnalysisPreset::Rbxport, &settings, editor)
 }
 
 /// The whole job, apart from the event: what the command runs on a worker
@@ -213,8 +233,12 @@ fn analyse_and_save(
         .iter()
         .map(|c| rbl_anlz::BandColumn { low: c.low, mid: c.mid, high: c.high, peak: c.peak })
         .collect();
+    // `PPTH` as rekordbox writes it in the share tree: `?/<file name>`.
+    // rekordbox 7.2.19 ignores the grid of a file whose `PPTH` is not the one
+    // it derives for the track (upstream issue #323), so the full path this
+    // wrote before left tracks with "no beat grid information".
     let files = rbl_anlz::author_with_overview(
-        path,
+        &rbl_anlz::share_tree_ppth(path),
         &beats,
         &columns,
         analysis.waveform.overview.as_slice().try_into().ok(),
@@ -518,7 +542,7 @@ fn write_analysis_files(dat: &std::path::Path, files: &rbl_anlz::AnalysisFiles) 
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -539,7 +563,7 @@ mod tests {
 
     /// A mono 16-bit WAV of a click every `beat_secs`, loud enough for the
     /// tempo detector and long enough for a few hundred waveform columns.
-    fn write_click_wav(path: &std::path::Path, seconds: u32, beat_secs: f32) {
+    pub(crate) fn write_click_wav(path: &std::path::Path, seconds: u32, beat_secs: f32) {
         let rate = 22_050_u32;
         let frames = rate * seconds;
         let mut data = Vec::with_capacity(frames as usize * 2);
@@ -608,12 +632,20 @@ mod tests {
         // The three files, parseable, with the grid and every waveform.
         let dat_path = rbl_anlz::resolve(&share, &result.analysis_path);
         let dat = rbl_anlz::Anlz::read(&dat_path).expect("the DAT is there");
-        assert_eq!(dat.path().unwrap(), audio.to_str().unwrap());
+        // `PPTH` and the section layout are rekordbox's own share-tree shape
+        // (upstream issue #323): `?/<file name>`, not the full path.
+        assert_eq!(dat.path().unwrap(), "?/click.wav");
+        let tags = |file: &rbl_anlz::Anlz| file.sections.iter().map(|s| s.tag.to_string()).collect::<Vec<_>>();
+        assert_eq!(tags(&dat), ["PPTH", "PVBR", "PQTZ", "PWAV", "PWV2", "PCOB", "PCOB"]);
         assert_eq!(dat.beat_grid().unwrap().len() as u32, result.beats);
         assert_eq!(dat.waveform(b"PWAV").unwrap().1.len(), 400);
         let ext = rbl_anlz::Anlz::read(&rbl_anlz::sibling(&dat_path, "EXT")).expect("the EXT is there");
         assert_eq!(ext.waveform(b"PWV5").unwrap().0, 2);
+        assert_eq!(tags(&ext), ["PPTH", "PWV3", "PCOB", "PCOB", "PCO2", "PCO2", "PWV5", "PWV4"]);
         let two = rbl_anlz::Anlz::read(&rbl_anlz::sibling(&dat_path, "2EX")).expect("the 2EX is there");
+        assert_eq!(tags(&two), ["PPTH", "PWV7", "PWV6"]);
+        assert_eq!(ext.path().unwrap(), "?/click.wav");
+        assert_eq!(two.path().unwrap(), "?/click.wav");
         assert_eq!(two.waveform(b"PWV6").unwrap().1.len(), 3600);
 
         // And the row says so.

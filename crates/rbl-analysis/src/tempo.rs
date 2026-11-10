@@ -205,6 +205,10 @@ pub struct TempoOptions {
     pub segment_threshold: f64,
     /// Where each beat is placed when the line is fitted.
     pub placement: Placement,
+    /// One tempo for the whole track, as rekordbox's Normal (not Dynamic)
+    /// analysis mode gives: the track is fitted as a single line and never
+    /// split into segments at a tempo change, a ramp or a gap.
+    pub constant: bool,
 }
 
 /// What a beat is snapped to before the line is fitted through the beats.
@@ -230,6 +234,7 @@ impl Default for TempoOptions {
             segment_window_secs: 16.0,
             segment_threshold: 0.02,
             placement: Placement::Attack,
+            constant: false,
         }
     }
 }
@@ -1102,6 +1107,15 @@ fn run_bounds(labels: &[f64]) -> Vec<(usize, usize)> {
 fn segment(reader: Reader<'_>, bpm: f64, options: TempoOptions, trace: Option<&mut Vec<GapDecision>>) -> Vec<Segment> {
     let (values, rate, origin_secs) = (reader.values, reader.rate, reader.origin_secs);
     let n = values.len();
+    if options.constant {
+        // The whole track as one line: the snapping in the fit leaves out
+        // hits a tempo change or a breakdown has moved off it.
+        let to_secs = |x: f64| origin_secs + x / rate;
+        return fit(reader, bpm, 0, n, options)
+            .map(|f| Segment { from_secs: to_secs(0.0), to_secs: to_secs(n as f64), period_secs: f.period / rate, phase_secs: to_secs(f.phase) })
+            .into_iter()
+            .collect();
+    }
     let window = ((options.segment_window_secs * rate) as usize).max(64);
     // Local tempo per window, as a ratio to the track's, or None where the
     // window has too little to say.
@@ -2340,5 +2354,14 @@ mod tests {
         let result = detect_tempo_with(&onsets, Some(&kicks), None, options());
         assert_eq!(result.segments.len(), 1, "{:?}", result.segments);
         assert!((result.bpm - 130.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn a_constant_grid_keeps_one_tempo_through_a_slowdown() {
+        let (onsets, kicks) = slowdown(0.21);
+        let result = detect_tempo_with(&onsets, Some(&kicks), None, TempoOptions { constant: true, ..options() });
+        assert_eq!(result.segments.len(), 1, "{:?}", result.segments);
+        assert!((result.bpm - 130.0).abs() < 0.1, "{}", result.bpm);
+        assert!(result.beats.iter().all(|b| b.tempo_x100 == result.beats[0].tempo_x100));
     }
 }

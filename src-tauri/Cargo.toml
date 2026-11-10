@@ -31,6 +31,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 rbl-core = { path = "../crates/rbl-core" }
 rbl-db = { path = "../crates/rbl-db" }
+# Writing tags derived from file names into library copies (--write-tags).
+lofty = { version = "0.22", default-features = false }
 rbl-index = { path = "../crates/rbl-index" }
 rbl-anlz = { path = "../crates/rbl-anlz" }
 rbl-analysis = { path = "../crates/rbl-analysis" }

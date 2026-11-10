@@ -156,7 +156,10 @@ fn a_copied_track_never_lands_on_a_file_the_library_keeps_there() {
 fn a_path_a_stick_cannot_name_is_copied_as_rekordbox_does() {
     let dest = tempfile::tempdir().unwrap();
     // A trailing dot is one of the things `hasSpecialCharInFilePath` rejects.
-    let file = dest.path().join("Music/Vol. 2./one.mp3");
+    // A verbatim Windows path preserves the trailing dot instead of silently
+    // creating a different, already FAT-safe directory.
+    let root = if cfg!(windows) { dest.path().canonicalize().unwrap() } else { dest.path().to_owned() };
+    let file = root.join("Music").join("Vol. 2.").join("one.mp3");
     let tracks = vec![track(&file, 1, "One", "TRIODE", 1)];
 
     let report = export(dest.path(), &tracks, &one_list(&tracks)).unwrap();

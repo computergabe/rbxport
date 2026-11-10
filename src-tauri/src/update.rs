@@ -48,6 +48,16 @@ use crate::error::{AppError, AppResult, ErrorKind};
 /// The event a download's progress goes out on.
 pub const PROGRESS_EVENT: &str = "update:progress";
 
+// This fork is distributed manually. Never install the upstream publisher's
+// binaries, including through an old preference or a staged-update helper.
+fn updates_allowed() -> bool { false }
+
+fn require_updates_allowed() -> AppResult<()> {
+    if updates_allowed() { return Ok(()); }
+    Err(AppError::new(ErrorKind::ReadOnly,
+        "In-app updates are disabled for this custom version. Download releases from https://github.com/computergabe/rbxport/releases."))
+}
+
 /// The least time between two progress events.
 const PROGRESS_EVERY: Duration = Duration::from_millis(100);
 
@@ -172,6 +182,7 @@ pub async fn check_for_update(
     app: AppHandle,
     updates: tauri::State<'_, std::sync::Arc<Updates>>,
 ) -> AppResult<UpdateCheckDto> {
+    require_updates_allowed()?;
     let current_version = app.package_info().version.to_string();
     let found = app
         .updater()
@@ -217,6 +228,7 @@ pub async fn check_for_update(
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value, reason = "Tauri's State extractor is injected by value")]
 pub fn ready_update(updates: tauri::State<'_, std::sync::Arc<Updates>>) -> Option<UpdateReadyDto> {
+    if !updates_allowed() { return None; }
     updates.pending.lock().as_ref().and_then(|pending| {
         pending.placement.as_ref().map(|placement| UpdateReadyDto {
             version: pending.update.version.clone(),
@@ -237,6 +249,7 @@ pub async fn download_update(
     app: AppHandle,
     updates: tauri::State<'_, std::sync::Arc<Updates>>,
 ) -> AppResult<UpdateReadyDto> {
+    require_updates_allowed()?;
     if cfg!(debug_assertions) {
         return Err(AppError::new(
             ErrorKind::Internal,
@@ -347,6 +360,7 @@ pub async fn restart_to_update(
     app: AppHandle,
     updates: tauri::State<'_, std::sync::Arc<Updates>>,
 ) -> AppResult<()> {
+    require_updates_allowed()?;
     let (update, placement) = {
         let pending = updates.pending.lock();
         let Some(pending) = pending.as_ref() else {
@@ -390,6 +404,7 @@ pub async fn restart_to_update(
 /// quit can run; a Linux package would prompt for a password, and stays for
 /// [`restart_to_update`].
 pub fn on_exit(app: &AppHandle) {
+    if !updates_allowed() { return; }
     if !cfg!(windows) {
         return;
     }
@@ -424,6 +439,9 @@ pub fn on_exit(app: &AppHandle) {
 /// Returns the process exit code when Windows started this binary as the
 /// protected update helper, or `None` for an ordinary application launch.
 pub fn run_elevated_helper_if_requested() -> Option<i32> {
+    if !updates_allowed() {
+        return std::env::args().any(|arg| arg == "--apply-staged-update").then_some(1);
+    }
     elevated_update::run_if_requested()
 }
 
@@ -498,6 +516,14 @@ fn is_link_definition(line: &str) -> bool {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_build_refuses_updates_and_has_no_update_feed() {
+        assert!(!updates_allowed());
+        assert!(require_updates_allowed().unwrap_err().message.contains("computergabe/rbxport/releases"));
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert!(config["plugins"]["updater"]["endpoints"].as_array().unwrap().is_empty());
+    }
 
     const LOG: &str = "# Changelog\n\nWhat changed.\n\n\
 ## [0.4.0] — 2026-09-10\n\n### Added\n- A limiter.\n\n\

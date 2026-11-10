@@ -1,5 +1,16 @@
 # GitHub Actions layout
 
+## Community Windows fork
+
+This fork tests and builds releases locally, then publishes the verified
+package and corresponding source to its own GitHub release. The three
+`fork-windows-*.yml` workflows are manual fallbacks; pushing source does not
+start another hosted build. See the [Windows guide](../../docs/user/windows-import.md#local-windows-builds)
+for the local validation commands. The upstream release/deployment workflows
+below are not used for community releases.
+
+## Upstream workflow layout
+
 The entry-point workflows describe orchestration. Reusable workflows and local
 composite actions own implementation details.
 

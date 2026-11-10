@@ -175,14 +175,18 @@ mod tests {
             track(4, "not absolute.mp3"),
         ]);
         let exports = exports(&library);
-        assert_eq!(exports.names(), ["/"]);
-        let root = exports.get("/").unwrap();
-        let (_, relative) = split(one).unwrap();
+        let (native_export, relative) = split(one).unwrap();
+        let mut names = vec!["/".to_owned()];
+        if native_export != "/" { names.push(native_export.clone()); }
+        names.sort();
+        assert_eq!(exports.names(), names);
+        let root = exports.get(&native_export).unwrap();
+        let foreign_root = exports.get("/").unwrap();
         let (folder, _) = root_of(one, &relative).unwrap();
 
         // Nothing is built until asked: the tree is the root alone.
         assert_eq!(
-            root.len(),
+            foreign_root.len(),
             1 + 3,
             "the shallow track's two directories and itself"
         );
@@ -192,10 +196,8 @@ mod tests {
         let a = root.resolve(a_dir).unwrap();
         assert_eq!(root.children(a).len(), 2);
         assert_eq!(
-            root.source(root.resolve(&relative).unwrap())
-                .unwrap()
-                .to_str(),
-            Some(one)
+            root.source(root.resolve(&relative).unwrap()),
+            Some(std::path::PathBuf::from(one))
         );
         assert!(
             root.resolve(&format!("{}/stray.wav", a_dir.rsplit_once('/').unwrap().0))
@@ -206,14 +208,14 @@ mod tests {
         assert_eq!(root.resolve("etc/hosts"), None);
         assert_eq!(root.resolve("Users/me/Music/other.mp3"), None);
         // The folders on the way list only the way.
-        let top: Vec<String> = root
-            .children(root.root())
+        let top: Vec<String> = foreign_root
+            .children(foreign_root.root())
             .iter()
-            .map(|&i| root.name(i).unwrap())
+            .map(|&i| foreign_root.name(i).unwrap())
             .collect();
         assert!(top.contains(&"Users".to_owned()), "{top:?}");
         assert_eq!(
-            root.source(root.resolve("Users/me/three.mp3").unwrap())
+            foreign_root.source(foreign_root.resolve("Users/me/three.mp3").unwrap())
                 .unwrap()
                 .to_str(),
             Some("/Users/me/three.mp3")

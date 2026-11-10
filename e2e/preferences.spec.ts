@@ -286,11 +286,8 @@ test("About groups version and update controls", async ({ page }) => {
   await expect(dialog.getByTestId("about-version")).toHaveText("v0.4.0");
   await expect(updates.getByRole("button", { name: "Check for updates" })).toBeVisible();
   const auto = dialog.getByRole("switch", { name: "Download updates" });
-  await expect(auto).toBeChecked();
-  await expect(dialog.getByRole("combobox", { name: "Update frequency" })).toHaveValue("start");
-  await auto.click();
   await expect(auto).not.toBeChecked();
-  await expect(dialog.getByRole("combobox", { name: "Update frequency" })).toBeDisabled();
+  await expect(auto).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Check for updates" })).toBeEnabled();
 
   const advancedItem = dialog.locator("li").filter({ has: page.getByRole("tab", { name: "Advanced", exact: true }) });
